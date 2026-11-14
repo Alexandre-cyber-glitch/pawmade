@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/living_item.dart';
+import 'dotted_circle.dart';
 
 class LivingAvatarItem extends StatelessWidget {
   final LivingItem living;
@@ -25,36 +26,46 @@ class LivingAvatarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const caramel = Color(0xFFB58A62);
+
+    final avatar = ClipOval(
+      child: living.photoUrl != null && living.photoUrl!.isNotEmpty
+          ? Image.network(
+              living.photoUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Icon(fallbackIcon, size: 40);
+              },
+            )
+          : Icon(fallbackIcon, size: 30),
+    );
+
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
         width: 76,
         child: Column(
           children: [
-            Container(
+            SizedBox(
               width: 68,
               height: 68,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected
-                      ? const Color(0xFFB58A62)
-                      : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-              child: ClipOval(
-                child: living.photoUrl != null && living.photoUrl!.isNotEmpty
-                    ? Image.network(
-                        living.photoUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(fallbackIcon, size: 30);
-                        },
-                      )
-                    : Icon(fallbackIcon, size: 30),
-              ),
+              child: isSelected
+                  ? Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: caramel, width: 2),
+                      ),
+                      child: avatar,
+                    )
+                  : DottedCircle(
+                      size: 68,
+                      color: caramel,
+                      child: Padding(
+                        padding: const EdgeInsets.all(5),
+                        child: avatar,
+                      ),
+                    ),
             ),
             const SizedBox(height: 6),
             Text(

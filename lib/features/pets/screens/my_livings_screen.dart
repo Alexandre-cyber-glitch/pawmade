@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/living_item.dart';
 import '../service/living_api.dart';
+import '../widgets/dotted_circle.dart';
 import '../widgets/living_avatar_item.dart';
 import '../widgets/living_detail_card.dart';
 
@@ -17,7 +18,7 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
 
   late Future<List<LivingItem>> _livingsFuture;
 
-  int? _selectedLivingId;
+  LivingItem? _selectedLiving;
 
   @override
   void initState() {
@@ -46,6 +47,8 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
 
               // 2. Erreur
               if (snapshot.hasError) {
+                debugPrint('ERREUR CHARGEMENT LIVINGS : ${snapshot.error}');
+
                 return Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -55,6 +58,7 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
                       ElevatedButton(
                         onPressed: () {
                           setState(() {
+                            _selectedLiving = null;
                             _loadLivings();
                           });
                         },
@@ -68,15 +72,30 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
               // 3. Données récupérées
               final livings = snapshot.data ?? [];
 
+              debugPrint('========== LIVINGS CHARGÉS ==========');
+              debugPrint('Nombre de living : ${livings.length}');
+
+              for (final living in livings) {
+                debugPrint(
+                  'Living : ${living.name} | '
+                  'ID : ${living.id} | '
+                  'TYPE : ${living.type}',
+                );
+              }
+
               if (livings.isEmpty) {
                 return const Center(child: Text('Aucun élément enregistré.'));
               }
 
               // 4. Sélection du premier élément par défaut
-              final selectedLiving = livings.firstWhere(
-                (living) => living.id == _selectedLivingId,
-                orElse: () => livings.first,
-              );
+              // On conserve l'objet sélectionné directement.
+              final selectedLiving = _selectedLiving ?? livings.first;
+
+              debugPrint('========== SÉLECTION ACTUELLE ==========');
+              debugPrint('Nom : ${selectedLiving.name}');
+              debugPrint('ID : ${selectedLiving.id}');
+              debugPrint('Type : ${selectedLiving.type}');
+              debugPrint('========================================');
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -86,16 +105,11 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'My Living',
+                        'My Pets',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                         ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.add_circle_outline),
-                        label: const Text('Add'),
                       ),
                     ],
                   ),
@@ -104,31 +118,79 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
 
                   // Liste horizontale des éléments
                   SizedBox(
-                    height: 115,
-                    child: ListView.separated(
+                    height: 125,
+                    child: ListView(
                       scrollDirection: Axis.horizontal,
-                      itemCount: livings.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, index) {
-                        final living = livings[index];
+                      children: [
+                        // 1. Les living existants
+                        ...livings.map((living) {
+                          final isSelected = identical(living, selectedLiving);
 
-                        return LivingAvatarItem(
-                          living: living,
-                          isSelected: living.id == selectedLiving.id,
-                          onTap: () {
-                            setState(() {
-                              _selectedLivingId = living.id;
-                            });
-                          },
-                        );
-                      },
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: LivingAvatarItem(
+                              living: living,
+                              isSelected: isSelected,
+                              onTap: () {
+                                setState(() {
+                                  _selectedLiving = living;
+                                });
+                              },
+                            ),
+                          );
+                        }),
+
+                        // 2. Cercle avec point d'interrogation
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Column(
+                            children: [
+                              DottedCircle(
+                                size: 68,
+                                color: const Color(0xFFB58A62),
+                                child: const Center(
+                                  child: Text(
+                                    '?',
+                                    style: TextStyle(
+                                      fontSize: 28,
+                                      color: Color(0xFFB58A62),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // 3. Cercle Add pet
+                        Column(
+                          children: [
+                            DottedCircle(
+                              size: 68,
+                              color: const Color(0xFFB58A62),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.add,
+                                  size: 30,
+                                  color: Color(0xFFB58A62),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
 
                   const SizedBox(height: 16),
 
-                  // Carte de l'élément sélectionné
-                  LivingDetailCard(living: selectedLiving),
+                  // Carte du living sélectionné
+                  LivingDetailCard(
+                    key: ValueKey(
+                      '${selectedLiving.type}_${selectedLiving.id}',
+                    ),
+                    living: selectedLiving,
+                  ),
                 ],
               );
             },
