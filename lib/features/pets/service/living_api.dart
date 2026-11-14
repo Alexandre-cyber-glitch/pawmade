@@ -1,7 +1,8 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 
-import '../models/living_item.dart';
+import '../models/living_detail.dart';
+import '../models/living_summary.dart';
 
 class LivingApi {
   static const String baseUrl = 'http://192.168.1.101:8080';
@@ -14,25 +15,29 @@ class LivingApi {
     ),
   );
 
-  Future<List<LivingItem>> findAll() async {
+  /// `GET /api/living` -> liste légère pour les cercles.
+  Future<List<LivingSummary>> findAll() async {
     try {
       final response = await _dio.get('/api/living');
-
-      debugPrint('REPONSE API : ${response.data}');
-
       final List<dynamic> data = response.data['livings'];
-
-      final livings = data.map((json) {
-        debugPrint('CONVERSION JSON : $json');
-        return LivingItem.fromJson(json);
-      }).toList();
-
-      debugPrint('LIVINGS CONVERTIS : ${livings.length}');
-
-      return livings;
+      return data
+          .map((json) => LivingSummary.fromJson(json as Map<String, dynamic>))
+          .toList();
     } catch (e, stackTrace) {
-      debugPrint('ERREUR LIVING API : $e');
-      debugPrint('STACK TRACE : $stackTrace');
+      debugPrint('ERREUR LIVING API findAll : $e\n$stackTrace');
+      rethrow;
+    }
+  }
+
+  /// `GET /api/living/{id}` -> détail complet pour la carte.
+  Future<LivingDetail> findById(int id) async {
+    try {
+      final response = await _dio.get('/api/living/$id');
+      return LivingDetail.fromJson(
+        response.data['living'] as Map<String, dynamic>,
+      );
+    } catch (e, stackTrace) {
+      debugPrint('ERREUR LIVING API findById($id) : $e\n$stackTrace');
       rethrow;
     }
   }

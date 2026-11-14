@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../models/living_item.dart';
+import '../models/living_summary.dart';
 
 class LivingAvatarItem extends StatelessWidget {
-  final LivingItem living;
+  final LivingSummary living;
   final bool isSelected;
   final VoidCallback onTap;
 
-  static const double size = 72;
+  static const double size = 88;
 
   const LivingAvatarItem({
     super.key,

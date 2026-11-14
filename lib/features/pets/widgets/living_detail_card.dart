@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../models/living_item.dart';
+import '../models/living_detail.dart';
 
 /// Carte "profil" du living sélectionné : grande photo + infos principales.
 class LivingDetailCard extends StatelessWidget {
-  final LivingItem living;
+  final LivingDetail living;
   final VoidCallback? onEdit;
 
   const LivingDetailCard({super.key, required this.living, this.onEdit});
@@ -12,7 +12,7 @@ class LivingDetailCard extends StatelessWidget {
   static const _caramel = Color(0xFFB58A62);
   static const _textDark = Color(0xFF2D2A26);
   static const _radius = 24.0;
-  static const _photoHeight = 230.0;
+  static const _photoHeight = 175.0;
 
   @override
   Widget build(BuildContext context) {
@@ -35,14 +35,14 @@ class LivingDetailCard extends StatelessWidget {
         children: [
           _buildPhoto(),
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   living.name,
                   style: const TextStyle(
-                    fontSize: 26,
+                    fontSize: 22,
                     fontWeight: FontWeight.w800,
                     color: _textDark,
                   ),
@@ -246,6 +246,73 @@ class _InfoChip extends StatelessWidget {
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: Color(0xFF2D2A26),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Carte "fantôme" affichée pendant le chargement du détail.
+class LivingDetailCardSkeleton extends StatelessWidget {
+  const LivingDetailCardSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    const shade = Color(0xFFF2EDE6);
+
+    Widget bar(double width, double height) => Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: shade,
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 175,
+            color: shade,
+            alignment: Alignment.center,
+            child: const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Color(0xFFB58A62),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                bar(140, 26),
+                const SizedBox(height: 8),
+                bar(110, 16),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    bar(72, 36),
+                    const SizedBox(width: 8),
+                    bar(72, 36),
+                    const SizedBox(width: 8),
+                    bar(72, 36),
+                  ],
+                ),
+              ],
             ),
           ),
         ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/living_item.dart';
+import '../models/living_detail.dart';
+import '../models/living_summary.dart';
 import '../service/living_api.dart';
 import '../widgets/living_avatar_item.dart';
 import '../widgets/living_detail_card.dart';
@@ -17,9 +18,15 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
 
   final LivingApi _livingApi = LivingApi();
 
-  late Future<List<LivingItem>> _livingsFuture;
+  /// Liste légère pour les cercles (GET /api/living).
+  late Future<List<LivingSummary>> _livingsFuture;
 
-  LivingItem? _selectedLiving;
+  /// Id du cercle sélectionné.
+  int? _selectedId;
+
+  /// Détail du living sélectionné (GET /api/living/{id}).
+  /// Re-fetché à chaque clic pour avoir les infos à jour.
+  Future<LivingDetail>? _detailFuture;
 
   @override
   void initState() {
@@ -27,8 +34,28 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
     _loadLivings();
   }
 
+  /// Charge les summaries, puis le détail du sélectionné
+  /// (le premier par défaut, ou celui déjà choisi s'il existe encore).
   void _loadLivings() {
-    _livingsFuture = _livingApi.findAll();
+    _livingsFuture = _livingApi.findAll().then((livings) {
+      if (livings.isNotEmpty && mounted) {
+        final stillExists = livings.any((l) => l.id == _selectedId);
+        _selectLiving(stillExists ? _selectedId! : livings.first.id);
+      }
+      return livings;
+    });
+  }
+
+  void _selectLiving(int id) {
+    setState(() {
+      _selectedId = id;
+      _detailFuture = _livingApi.findById(id);
+    });
+  }
+
+  Future<void> _refresh() async {
+    setState(_loadLivings);
+    await _livingsFuture;
   }
 
   void _onAddLiving() {
@@ -40,35 +67,20 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFAF7F2),
       body: SafeArea(
-        child: FutureBuilder<List<LivingItem>>(
+        child: FutureBuilder<List<LivingSummary>>(
           future: _livingsFuture,
           builder: (context, snapshot) {
             // 1. Chargement
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
 
             // 2. Erreur
             if (snapshot.hasError) {
-              debugPrint('ERREUR CHARGEMENT LIVINGS : ${snapshot.error}');
-
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Impossible de charger tes éléments.'),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _selectedLiving = null;
-                          _loadLivings();
-                        });
-                      },
-                      child: const Text('Réessayer'),
-                    ),
-                  ],
-                ),
+              return _ErrorView(
+                message: 'Impossible de charger tes éléments.',
+                onRetry: () => setState(_loadLivings),
               );
             }
 
@@ -79,70 +91,116 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
               return const Center(child: Text('Aucun élément enregistré.'));
             }
 
-            // 4. Sélection du premier élément par défaut
-            final selectedLiving = _selectedLiving ?? livings.first;
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // En-tête
-                  const Text(
-                    'My Pets',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: _textDark,
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Liste horizontale des éléments
-                  SizedBox(
-                    height: 122,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      clipBehavior: Clip.none,
-                      children: [
-                        ...livings.map((living) {
-                          final isSelected = identical(living, selectedLiving);
-
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 12),
-                            child: LivingAvatarItem(
-                              living: living,
-                              isSelected: isSelected,
-                              onTap: () {
-                                setState(() {
-                                  _selectedLiving = living;
-                                });
-                              },
-                            ),
-                          );
-                        }),
-                        AddLivingAvatar(onTap: _onAddLiving),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Carte du living sélectionné
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: LivingDetailCard(
-                      key: ValueKey(
-                        '${selectedLiving.type}_${selectedLiving.id}',
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // En-tête
+                    const Text(
+                      'My Pets',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: _textDark,
                       ),
-                      living: selectedLiving,
                     ),
-                  ),
-                ],
+
+                    const SizedBox(height: 16),
+
+                    // Cercles (stories)
+                    SizedBox(
+                      height: 140,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        clipBehavior: Clip.none,
+                        children: [
+                          ...livings.map(
+                            (living) => Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: LivingAvatarItem(
+                                living: living,
+                                isSelected: living.id == _selectedId,
+                                onTap: () => _selectLiving(living.id),
+                              ),
+                            ),
+                          ),
+                          AddLivingAvatar(onTap: _onAddLiving),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Carte du living sélectionné
+                    _buildDetail(),
+                  ],
+                ),
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetail() {
+    return FutureBuilder<LivingDetail>(
+      future: _detailFuture,
+      builder: (context, snapshot) {
+        final Widget child;
+
+        if (snapshot.hasError) {
+          child = _ErrorView(
+            key: const ValueKey('detail_error'),
+            message: 'Impossible de charger le détail.',
+            onRetry: () {
+              if (_selectedId != null) _selectLiving(_selectedId!);
+            },
+          );
+        } else if (snapshot.connectionState != ConnectionState.done ||
+            !snapshot.hasData) {
+          child = const LivingDetailCardSkeleton(
+            key: ValueKey('detail_loading'),
+          );
+        } else {
+          final detail = snapshot.data!;
+          child = LivingDetailCard(
+            key: ValueKey('detail_${detail.id}'),
+            living: detail,
+          );
+        }
+
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: child,
+        );
+      },
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorView({super.key, required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(message),
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: onRetry, child: const Text('Réessayer')),
+          ],
         ),
       ),
     );

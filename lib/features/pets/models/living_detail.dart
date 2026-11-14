@@ -1,52 +1,53 @@
-class LivingItem {
+import 'living_labels.dart';
+
+/// Version complète d'un living, renvoyée par `GET /api/living/{id}`.
+/// Correspond à `DogDetail` ou `PlantDetail` côté back (champ `type`).
+class LivingDetail {
   final int id;
   final String name;
   final String? photoUrl;
   final String type;
 
-  final String? breed;
+  // Animal / Dog
   final DateTime? birthDate;
   final String? sex;
   final double? weight;
+  final String? breed;
 
+  // Plant
   final String? species;
   final DateTime? acquisitionDate;
   final int? wateringFrequencyDays;
 
-  const LivingItem({
+  const LivingDetail({
     required this.id,
     required this.name,
     required this.type,
     this.photoUrl,
-    this.breed,
     this.birthDate,
     this.sex,
     this.weight,
+    this.breed,
     this.species,
     this.acquisitionDate,
     this.wateringFrequencyDays,
   });
 
-  factory LivingItem.fromJson(Map<String, dynamic> json) {
-    return LivingItem(
+  factory LivingDetail.fromJson(Map<String, dynamic> json) {
+    DateTime? date(String key) =>
+        json[key] != null ? DateTime.parse(json[key] as String) : null;
+
+    return LivingDetail(
       id: (json['id'] as num).toInt(),
       name: json['name'] as String,
       type: json['type'] as String,
       photoUrl: json['photoUrl'] as String?,
-
-      // Dog
-      breed: json['breed'] as String?,
-      birthDate: json['birthDate'] != null
-          ? DateTime.parse(json['birthDate'] as String)
-          : null,
+      birthDate: date('birthDate'),
       sex: json['sex'] as String?,
       weight: (json['weight'] as num?)?.toDouble(),
-
-      // Plant
+      breed: json['breed'] as String?,
       species: json['species'] as String?,
-      acquisitionDate: json['acquisitionDate'] != null
-          ? DateTime.parse(json['acquisitionDate'] as String)
-          : null,
+      acquisitionDate: date('acquisitionDate'),
       wateringFrequencyDays: (json['wateringFrequencyDays'] as num?)?.toInt(),
     );
   }
@@ -58,20 +59,13 @@ class LivingItem {
   // ---------- Libellés d'affichage ----------
 
   /// "DOG" -> "Dog"
-  String get typeLabel => _humanize(type);
+  String get typeLabel => humanizeEnum(type);
 
-  /// "GOLDEN_RETRIVEVER" -> "Golden Retriever"
-  String? get breedLabel {
-    if (breed == null) return null;
-    const fixes = {
-      'GOLDEN_RETRIVEVER': 'Golden Retriever',
-      'GERMAN_SHEPARD': 'German Shepherd',
-    };
-    return fixes[breed] ?? _humanize(breed!);
-  }
+  /// "GOLDEN_RETRIEVER" -> "Golden Retriever"
+  String? get breedLabel => breed == null ? null : humanizeEnum(breed!);
 
   /// "MALE" -> "Male"
-  String? get sexLabel => sex == null ? null : _humanize(sex!);
+  String? get sexLabel => sex == null ? null : humanizeEnum(sex!);
 
   /// "3 Years", "1 Year", "5 Months"
   String? get ageLabel {
@@ -96,11 +90,4 @@ class LivingItem {
         : w.toStringAsFixed(1);
     return '$text kg';
   }
-
-  static String _humanize(String value) => value
-      .toLowerCase()
-      .split('_')
-      .where((p) => p.isNotEmpty)
-      .map((p) => p[0].toUpperCase() + p.substring(1))
-      .join(' ');
 }
