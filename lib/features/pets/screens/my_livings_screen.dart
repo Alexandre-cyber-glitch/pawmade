@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../models/living_item.dart';
 import '../service/living_api.dart';
-import '../widgets/dotted_circle.dart';
 import '../widgets/living_avatar_item.dart';
 import '../widgets/living_detail_card.dart';
 
@@ -14,6 +13,8 @@ class MyLivingsScreen extends StatefulWidget {
 }
 
 class _MyLivingsScreenState extends State<MyLivingsScreen> {
+  static const _textDark = Color(0xFF2D2A26);
+
   final LivingApi _livingApi = LivingApi();
 
   late Future<List<LivingItem>> _livingsFuture;
@@ -30,99 +31,81 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
     _livingsFuture = _livingApi.findAll();
   }
 
+  void _onAddLiving() {
+    // TODO: ouvrir l'écran d'ajout quand l'endpoint POST existera.
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFAF7F2),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: FutureBuilder<List<LivingItem>>(
-            future: _livingsFuture,
-            builder: (context, snapshot) {
-              // 1. Chargement
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+        child: FutureBuilder<List<LivingItem>>(
+          future: _livingsFuture,
+          builder: (context, snapshot) {
+            // 1. Chargement
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-              // 2. Erreur
-              if (snapshot.hasError) {
-                debugPrint('ERREUR CHARGEMENT LIVINGS : ${snapshot.error}');
+            // 2. Erreur
+            if (snapshot.hasError) {
+              debugPrint('ERREUR CHARGEMENT LIVINGS : ${snapshot.error}');
 
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Impossible de charger tes éléments.'),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _selectedLiving = null;
-                            _loadLivings();
-                          });
-                        },
-                        child: const Text('Réessayer'),
-                      ),
-                    ],
-                  ),
-                );
-              }
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Impossible de charger tes éléments.'),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedLiving = null;
+                          _loadLivings();
+                        });
+                      },
+                      child: const Text('Réessayer'),
+                    ),
+                  ],
+                ),
+              );
+            }
 
-              // 3. Données récupérées
-              final livings = snapshot.data ?? [];
+            // 3. Données récupérées
+            final livings = snapshot.data ?? [];
 
-              debugPrint('========== LIVINGS CHARGÉS ==========');
-              debugPrint('Nombre de living : ${livings.length}');
+            if (livings.isEmpty) {
+              return const Center(child: Text('Aucun élément enregistré.'));
+            }
 
-              for (final living in livings) {
-                debugPrint(
-                  'Living : ${living.name} | '
-                  'ID : ${living.id} | '
-                  'TYPE : ${living.type}',
-                );
-              }
+            // 4. Sélection du premier élément par défaut
+            final selectedLiving = _selectedLiving ?? livings.first;
 
-              if (livings.isEmpty) {
-                return const Center(child: Text('Aucun élément enregistré.'));
-              }
-
-              // 4. Sélection du premier élément par défaut
-              // On conserve l'objet sélectionné directement.
-              final selectedLiving = _selectedLiving ?? livings.first;
-
-              debugPrint('========== SÉLECTION ACTUELLE ==========');
-              debugPrint('Nom : ${selectedLiving.name}');
-              debugPrint('ID : ${selectedLiving.id}');
-              debugPrint('Type : ${selectedLiving.type}');
-              debugPrint('========================================');
-
-              return Column(
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // En-tête
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'My Pets',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                  const Text(
+                    'My Pets',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: _textDark,
+                    ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   // Liste horizontale des éléments
                   SizedBox(
-                    height: 125,
+                    height: 122,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
                       children: [
-                        // 1. Les living existants
                         ...livings.map((living) {
                           final isSelected = identical(living, selectedLiving);
 
@@ -139,62 +122,27 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
                             ),
                           );
                         }),
-
-                        // 2. Cercle avec point d'interrogation
-                        Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: Column(
-                            children: [
-                              DottedCircle(
-                                size: 68,
-                                color: const Color(0xFFB58A62),
-                                child: const Center(
-                                  child: Text(
-                                    '?',
-                                    style: TextStyle(
-                                      fontSize: 28,
-                                      color: Color(0xFFB58A62),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // 3. Cercle Add pet
-                        Column(
-                          children: [
-                            DottedCircle(
-                              size: 68,
-                              color: const Color(0xFFB58A62),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.add,
-                                  size: 30,
-                                  color: Color(0xFFB58A62),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                        AddLivingAvatar(onTap: _onAddLiving),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
                   // Carte du living sélectionné
-                  LivingDetailCard(
-                    key: ValueKey(
-                      '${selectedLiving.type}_${selectedLiving.id}',
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: LivingDetailCard(
+                      key: ValueKey(
+                        '${selectedLiving.type}_${selectedLiving.id}',
+                      ),
+                      living: selectedLiving,
                     ),
-                    living: selectedLiving,
                   ),
                 ],
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
       ),
     );

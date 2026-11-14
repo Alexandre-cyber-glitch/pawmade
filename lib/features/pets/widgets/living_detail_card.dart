@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../models/living_item.dart';
 
+/// Carte "profil" du living sélectionné : grande photo + infos principales.
 class LivingDetailCard extends StatelessWidget {
   final LivingItem living;
+  final VoidCallback? onEdit;
 
-  const LivingDetailCard({super.key, required this.living});
+  const LivingDetailCard({super.key, required this.living, this.onEdit});
+
+  static const _caramel = Color(0xFFB58A62);
+  static const _textDark = Color(0xFF2D2A26);
+  static const _radius = 24.0;
+  static const _photoHeight = 230.0;
 
   @override
   Widget build(BuildContext context) {
@@ -13,51 +20,40 @@ class LivingDetailCard extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(_radius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Grande photo
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: SizedBox(
-              width: double.infinity,
-              height: 190,
-              child: living.photoUrl != null && living.photoUrl!.isNotEmpty
-                  ? Image.network(
-                      living.photoUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _placeholder(),
-                    )
-                  : _placeholder(),
-            ),
-          ),
-
-          // Informations
+          _buildPhoto(),
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   living.name,
                   style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: _textDark,
                   ),
                 ),
-
-                const SizedBox(height: 4),
-
+                const SizedBox(height: 2),
                 Text(
-                  _getSubtitle(),
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  _subtitle,
+                  style: TextStyle(fontSize: 15, color: Colors.grey.shade600),
                 ),
-
                 const SizedBox(height: 14),
-
-                _buildSpecificInformations(),
+                Wrap(spacing: 8, runSpacing: 8, children: _infoChips()),
               ],
             ),
           ),
@@ -66,72 +62,90 @@ class LivingDetailCard extends StatelessWidget {
     );
   }
 
-  String _getSubtitle() {
-    if (living.isDog) {
-      return living.breed ?? 'Chien';
-    }
+  // ---------- Photo ----------
 
-    if (living.isPlant) {
-      return living.species ?? 'Plante';
-    }
+  Widget _buildPhoto() {
+    final hasPhoto = living.photoUrl != null && living.photoUrl!.isNotEmpty;
 
-    return living.type;
-  }
-
-  Widget _buildSpecificInformations() {
-    if (living.isDog) {
-      return Wrap(
-        spacing: 8,
-        runSpacing: 8,
+    return SizedBox(
+      height: _photoHeight,
+      width: double.infinity,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          _infoChip(Icons.male, living.sex ?? 'Inconnu'),
-          _infoChip(
-            Icons.monitor_weight_outlined,
-            '${living.weight ?? '-'} kg',
+          hasPhoto
+              ? Image.network(
+                  living.photoUrl!,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                  errorBuilder: (_, _, _) => _placeholder(),
+                  loadingBuilder: (context, child, progress) =>
+                      progress == null ? child : _placeholder(),
+                )
+              : _placeholder(),
+
+          // Léger dégradé en bas pour fondre la photo dans la carte
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.center,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, Color(0x22000000)],
+              ),
+            ),
           ),
-          _infoChip(
-            Icons.cake_outlined,
-            living.birthDate == null
-                ? 'Date inconnue'
-                : '${living.birthDate!.day}/'
-                      '${living.birthDate!.month}/'
-                      '${living.birthDate!.year}',
+
+          // Bouton Edit
+          Positioned(top: 14, right: 14, child: _editButton()),
+
+          // Petit texte manuscrit
+          Positioned(
+            right: 20,
+            bottom: 26,
+            child: Text(
+              living.isPlant ? 'My green\nbuddy ♡' : 'My\nBest Friend\n♡',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 15,
+                height: 1.15,
+                fontStyle: FontStyle.italic,
+                color: _textDark,
+                shadows: [Shadow(color: Colors.white70, blurRadius: 6)],
+              ),
+            ),
           ),
         ],
-      );
-    }
-
-    if (living.isPlant) {
-      return Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          _infoChip(
-            Icons.water_drop_outlined,
-            'Tous les ${living.wateringFrequencyDays ?? '-'} jours',
-          ),
-          _infoChip(Icons.eco_outlined, living.species ?? 'Espèce inconnue'),
-        ],
-      );
-    }
-
-    return const SizedBox.shrink();
-  }
-
-  Widget _infoChip(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAF7F2),
-        borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: const Color(0xFFB58A62)),
-          const SizedBox(width: 5),
-          Text(label, style: const TextStyle(fontSize: 12)),
-        ],
+    );
+  }
+
+  Widget _editButton() {
+    return Material(
+      color: Colors.white,
+      shape: const StadiumBorder(),
+      elevation: 2,
+      shadowColor: Colors.black26,
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onEdit,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.edit_outlined, size: 16, color: _textDark),
+              SizedBox(width: 6),
+              Text(
+                'Edit',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _textDark,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -139,8 +153,102 @@ class LivingDetailCard extends StatelessWidget {
   Widget _placeholder() {
     return Container(
       color: const Color(0xFFF2EDE6),
-      child: const Center(
-        child: Icon(Icons.photo_outlined, size: 50, color: Color(0xFFB58A62)),
+      child: Center(
+        child: Icon(
+          living.isPlant ? Icons.local_florist : Icons.pets,
+          size: 56,
+          color: _caramel,
+        ),
+      ),
+    );
+  }
+
+  // ---------- Infos ----------
+
+  String get _subtitle {
+    if (living.isDog) return living.breedLabel ?? 'Dog';
+    if (living.isPlant) return living.species ?? 'Plant';
+    return living.typeLabel;
+  }
+
+  List<Widget> _infoChips() {
+    if (living.isDog) {
+      final sex = living.sex;
+      return [
+        _InfoChip(
+          icon: sex == 'FEMALE' ? Icons.female : Icons.male,
+          iconColor: sex == 'FEMALE'
+              ? const Color(0xFFE07A9B)
+              : const Color(0xFF4A8FE2),
+          label: living.sexLabel ?? 'Unknown',
+        ),
+        _InfoChip(
+          icon: Icons.calendar_today_outlined,
+          label: living.ageLabel ?? '-',
+        ),
+        _InfoChip(
+          icon: Icons.monitor_weight_outlined,
+          label: living.weightLabel ?? '- kg',
+        ),
+      ];
+    }
+
+    if (living.isPlant) {
+      final acq = living.acquisitionDate;
+      return [
+        _InfoChip(
+          icon: Icons.water_drop_outlined,
+          iconColor: const Color(0xFF4A8FE2),
+          label: 'Every ${living.wateringFrequencyDays ?? '-'} days',
+        ),
+        if (acq != null)
+          _InfoChip(
+            icon: Icons.calendar_today_outlined,
+            label:
+                '${acq.day.toString().padLeft(2, '0')}/'
+                '${acq.month.toString().padLeft(2, '0')}/${acq.year}',
+          ),
+      ];
+    }
+
+    return const [];
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color iconColor;
+
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    this.iconColor = const Color(0xFF2D2A26),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAF7F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEFE8DE)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 17, color: iconColor),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF2D2A26),
+            ),
+          ),
+        ],
       ),
     );
   }
