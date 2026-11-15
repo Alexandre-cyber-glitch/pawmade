@@ -5,8 +5,13 @@ import 'living_labels.dart';
 class LivingDetail {
   final int id;
   final String name;
-  final String? photoUrl;
   final String type;
+
+  /// Image du cercle (petite, carrée).
+  final String? avatarUrl;
+
+  /// Grande image de la carte (format paysage).
+  final String? coverUrl;
 
   // Animal / Dog
   final DateTime? birthDate;
@@ -23,7 +28,8 @@ class LivingDetail {
     required this.id,
     required this.name,
     required this.type,
-    this.photoUrl,
+    this.avatarUrl,
+    this.coverUrl,
     this.birthDate,
     this.sex,
     this.weight,
@@ -34,19 +40,24 @@ class LivingDetail {
   });
 
   factory LivingDetail.fromJson(Map<String, dynamic> json) {
-    DateTime? date(String key) =>
-        json[key] != null ? DateTime.parse(json[key] as String) : null;
+    DateTime? date(String key) {
+      final raw = readString(json, key);
+      return raw == null ? null : DateTime.tryParse(raw);
+    }
+
+    final legacyPhoto = readString(json, 'photoUrl'); // ancien champ
 
     return LivingDetail(
       id: (json['id'] as num).toInt(),
-      name: json['name'] as String,
-      type: json['type'] as String,
-      photoUrl: json['photoUrl'] as String?,
+      name: readString(json, 'name') ?? '',
+      type: readString(json, 'type') ?? '',
+      avatarUrl: readString(json, 'avatarUrl') ?? legacyPhoto,
+      coverUrl: readString(json, 'coverUrl') ?? legacyPhoto,
       birthDate: date('birthDate'),
-      sex: json['sex'] as String?,
+      sex: readString(json, 'sex'),
       weight: (json['weight'] as num?)?.toDouble(),
-      breed: json['breed'] as String?,
-      species: json['species'] as String?,
+      breed: readString(json, 'breed'),
+      species: readString(json, 'species'),
       acquisitionDate: date('acquisitionDate'),
       wateringFrequencyDays: (json['wateringFrequencyDays'] as num?)?.toInt(),
     );

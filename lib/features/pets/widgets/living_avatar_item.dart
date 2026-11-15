@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/safe_network_image.dart';
 import '../models/living_summary.dart';
 
 class LivingAvatarItem extends StatelessWidget {
@@ -30,7 +31,6 @@ class LivingAvatarItem extends StatelessWidget {
     const caramel = Color(0xFFB58A62);
     const textDark = Color(0xFF2D2A26);
 
-    final hasPhoto = living.photoUrl != null && living.photoUrl!.isNotEmpty;
     final fallback = Container(
       color: const Color(0xFFF2EDE6),
       child: Icon(fallbackIcon, size: 30, color: caramel),
@@ -65,13 +65,10 @@ class LivingAvatarItem extends StatelessWidget {
               ),
               child: ClipOval(
                 child: SizedBox.expand(
-                  child: hasPhoto
-                      ? Image.network(
-                          living.photoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => fallback,
-                        )
-                      : fallback,
+                  child: SafeNetworkImage(
+                    urls: [living.avatarUrl],
+                    fallback: fallback,
+                  ),
                 ),
               ),
             ),

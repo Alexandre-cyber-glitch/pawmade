@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/safe_network_image.dart';
 import '../models/living_detail.dart';
 
 /// Carte "profil" du living sélectionné : grande photo + infos principales.
@@ -65,24 +66,18 @@ class LivingDetailCard extends StatelessWidget {
   // ---------- Photo ----------
 
   Widget _buildPhoto() {
-    final hasPhoto = living.photoUrl != null && living.photoUrl!.isNotEmpty;
-
     return SizedBox(
       height: _photoHeight,
       width: double.infinity,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          hasPhoto
-              ? Image.network(
-                  living.photoUrl!,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.topCenter,
-                  errorBuilder: (_, _, _) => _placeholder(),
-                  loadingBuilder: (context, child, progress) =>
-                      progress == null ? child : _placeholder(),
-                )
-              : _placeholder(),
+          // Cover en priorité, sinon l'avatar, sinon le placeholder.
+          SafeNetworkImage(
+            urls: [living.coverUrl, living.avatarUrl],
+            fallback: _placeholder(),
+            alignment: Alignment.topCenter,
+          ),
 
           // Léger dégradé en bas pour fondre la photo dans la carte
           const DecoratedBox(

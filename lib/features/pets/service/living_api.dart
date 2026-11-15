@@ -1,11 +1,12 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/api_config.dart';
 import '../models/living_detail.dart';
 import '../models/living_summary.dart';
 
 class LivingApi {
-  static const String baseUrl = 'http://192.168.1.101:8080';
+  static const String baseUrl = ApiConfig.baseUrl;
 
   final Dio _dio = Dio(
     BaseOptions(

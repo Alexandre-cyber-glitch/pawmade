@@ -5,22 +5,25 @@ import 'living_labels.dart';
 class LivingSummary {
   final int id;
   final String name;
-  final String? photoUrl;
   final String type;
+
+  /// Image du cercle (petite, carrée).
+  final String? avatarUrl;
 
   const LivingSummary({
     required this.id,
     required this.name,
     required this.type,
-    this.photoUrl,
+    this.avatarUrl,
   });
 
   factory LivingSummary.fromJson(Map<String, dynamic> json) {
     return LivingSummary(
       id: (json['id'] as num).toInt(),
-      name: json['name'] as String,
-      type: json['type'] as String,
-      photoUrl: json['photoUrl'] as String?,
+      name: readString(json, 'name') ?? '',
+      type: readString(json, 'type') ?? '',
+      // `avatarUrl` côté back ; `photoUrl` gardé en secours (ancien champ).
+      avatarUrl: readString(json, 'avatarUrl') ?? readString(json, 'photoUrl'),
     );
   }
 
