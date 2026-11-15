@@ -1,0 +1,192 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pawmade/core/api_exception.dart';
+import 'package:pawmade/features/pets/models/living_detail.dart';
+import 'package:pawmade/features/pets/models/update_living_request.dart';
+import 'package:pawmade/features/pets/service/living_api.dart';
+import 'package:pawmade/features/pets/widgets/edit/edit_form_fields.dart';
+import 'package:pawmade/features/pets/widgets/edit/edit_living_sheet.dart';
+
+/// Fausse API : enregistre la requête reçue, renvoie un résultat ou une erreur.
+class FakeLivingApi extends LivingApi {
+  UpdateLivingRequest? lastRequest;
+  ApiException? errorToThrow;
+
+  @override
+  Future<LivingDetail> update(int id, UpdateLivingRequest request) async {
+    lastRequest = request;
+    if (errorToThrow != null) throw errorToThrow!;
+    final json = request.toJson();
+    return LivingDetail.fromJson({...json, 'id': id});
+  }
+}
+
+final dog = LivingDetail(
+  id: 1,
+  name: 'Warm Waffle',
+  type: 'DOG',
+  avatarUrl: '/avatar/WarmWaffle.jpg',
+  coverUrl: '/cover/WarmeWaffle.webp',
+  birthDate: DateTime(2025, 6, 15),
+  sex: 'MALE',
+  weight: 12.5,
+  breed: 'GOLDEN_RETRIEVER',
+);
+
+/// Écran minimal avec un bouton qui ouvre le bloc et mémorise le résultat.
+Future<List<LivingDetail?>> pumpHost(
+  WidgetTester tester,
+  FakeLivingApi api,
+  LivingDetail living,
+) async {
+  tester.view.physicalSize = const Size(1080, 2400);
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+
+  final results = <LivingDetail?>[];
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () async => results.add(
+                await showEditLivingSheet(context, living: living, api: api),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('open'));
+  await tester.pumpAndSettle();
+  return results;
+}
+
+void main() {
+  group('validateurs (mêmes règles que le back)', () {
+    test('name', () {
+      expect(validateName(''), isNotNull);
+      expect(validateName('   '), isNotNull);
+      expect(validateName('a' * 51), isNotNull);
+      expect(validateName('Buddy'), isNull);
+    });
+    test('url', () {
+      expect(validateImageUrl(''), isNull);
+      expect(validateImageUrl('/avatar/a.jpg'), isNull);
+      expect(validateImageUrl('https://x.com/a.jpg'), isNull);
+      expect(validateImageUrl('avatar/a.jpg'), isNotNull);
+      expect(validateImageUrl('/a b.jpg'), isNotNull);
+    });
+    test('weight', () {
+      expect(validateWeight(''), isNull);
+      expect(validateWeight('12,5'), isNull);
+      expect(validateWeight('0'), isNotNull);
+      expect(validateWeight('-3'), isNotNull);
+      expect(validateWeight('1000'), isNotNull);
+      expect(validateWeight('12.345'), isNotNull);
+    });
+    test('watering', () {
+      expect(validateWateringDays('7'), isNull);
+      expect(validateWateringDays('0'), isNotNull);
+      expect(validateWateringDays('366'), isNotNull);
+    });
+  });
+
+  test('toJson : format attendu par le back', () {
+    final json = UpdateDogRequest(
+      name: 'Buddy',
+      birthDate: DateTime(2025, 6, 5),
+      weight: 12.5,
+    ).toJson();
+    expect(json['type'], 'DOG');
+    expect(json['birthDate'], '2025-06-05');
+    expect(json['weight'], 12.5);
+    expect(json.containsKey('avatarUrl'), isTrue); // null explicite (PUT)
+  });
+
+  testWidgets('préremplit, envoie les modifs et renvoie le détail à jour', (
+    tester,
+  ) async {
+    final api = FakeLivingApi();
+    final results = await pumpHost(tester, api, dog);
+
+    expect(find.text('Edit Warm Waffle'), findsOneWidget);
+    expect(find.text('Warm Waffle'), findsOneWidget); // champ Name prérempli
+    expect(find.text('12.5'), findsOneWidget); // poids prérempli
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Buddy');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Cover URL (card)'),
+      '   ',
+    );
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+
+    final req = api.lastRequest as UpdateDogRequest;
+    expect(req.name, 'Buddy');
+    expect(req.coverUrl, isNull); // champ vidé -> null, pas ""
+    expect(req.avatarUrl, '/avatar/WarmWaffle.jpg');
+    expect(req.breed, 'GOLDEN_RETRIEVER');
+    expect(req.weight, 12.5);
+
+    expect(find.text('Save changes'), findsNothing); // bloc fermé
+    expect(results.single?.name, 'Buddy');
+  });
+
+  testWidgets('nom vide : pas d\'appel API, erreur affichée', (tester) async {
+    final api = FakeLivingApi();
+    await pumpHost(tester, api, dog);
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'Name'), '');
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+
+    expect(api.lastRequest, isNull);
+    expect(find.text('Name is required'), findsOneWidget);
+    expect(find.text('Save changes'), findsOneWidget); // reste ouvert
+  });
+
+  testWidgets('erreur back : message affiché, le bloc reste ouvert', (
+    tester,
+  ) async {
+    final api = FakeLivingApi()
+      ..errorToThrow = const ApiException('Living 1 is a DOG, mismatch');
+    final results = await pumpHost(tester, api, dog);
+
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Living 1 is a DOG, mismatch'), findsOneWidget);
+    expect(find.text('Save changes'), findsOneWidget);
+    expect(results, isEmpty);
+  });
+
+  testWidgets('plante : champs plante, pas de champs chien', (tester) async {
+    final api = FakeLivingApi();
+    await pumpHost(
+      tester,
+      api,
+      const LivingDetail(
+        id: 2,
+        name: 'Albert',
+        type: 'PLANT',
+        species: 'Monstera Deliciosa',
+        wateringFrequencyDays: 7,
+      ),
+    );
+
+    expect(find.text('Species'), findsOneWidget);
+    expect(find.text('Watering every'), findsOneWidget);
+    expect(find.text('Breed'), findsNothing);
+    expect(find.text('Weight'), findsNothing);
+
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+    final req = api.lastRequest as UpdatePlantRequest;
+    expect(req.toJson()['type'], 'PLANT');
+    expect(req.wateringFrequencyDays, 7);
+  });
+}

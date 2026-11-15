@@ -79,18 +79,7 @@ class LivingDetail {
   String? get sexLabel => sex == null ? null : humanizeEnum(sex!);
 
   /// "3 Years", "1 Year", "5 Months"
-  String? get ageLabel {
-    if (birthDate == null) return null;
-    final now = DateTime.now();
-    var months =
-        (now.year - birthDate!.year) * 12 + now.month - birthDate!.month;
-    if (now.day < birthDate!.day) months--;
-    if (months < 0) months = 0;
-
-    if (months < 12) return '$months ${months == 1 ? 'Month' : 'Months'}';
-    final years = months ~/ 12;
-    return '$years ${years == 1 ? 'Year' : 'Years'}';
-  }
+  String? get ageLabel => birthDate == null ? null : ageLabelFor(birthDate!);
 
   /// 12.5 -> "12.5 kg", 28.0 -> "28 kg"
   String? get weightLabel {

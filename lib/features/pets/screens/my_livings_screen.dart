@@ -5,6 +5,8 @@ import '../models/living_summary.dart';
 import '../service/living_api.dart';
 import '../widgets/living_avatar_item.dart';
 import '../widgets/living_detail_card.dart';
+import '../../../core/theme/paw_colors.dart';
+import '../widgets/edit/edit_living_sheet.dart';
 
 class MyLivingsScreen extends StatefulWidget {
   const MyLivingsScreen({super.key});
@@ -20,6 +22,10 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
 
   /// Liste légère pour les cercles (GET /api/living).
   late Future<List<LivingSummary>> _livingsFuture;
+
+  /// Copie locale de la liste, modifiable après une édition
+  /// (pour mettre à jour un cercle sans recharger toute la liste).
+  List<LivingSummary>? _livings;
 
   /// Id du cercle sélectionné.
   int? _selectedId;
@@ -38,6 +44,7 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
   /// (le premier par défaut, ou celui déjà choisi s'il existe encore).
   void _loadLivings() {
     _livingsFuture = _livingApi.findAll().then((livings) {
+      _livings = livings;
       if (livings.isNotEmpty && mounted) {
         final stillExists = livings.any((l) => l.id == _selectedId);
         _selectLiving(stillExists ? _selectedId! : livings.first.id);
@@ -56,6 +63,42 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
   Future<void> _refresh() async {
     setState(_loadLivings);
     await _livingsFuture;
+  }
+
+  /// Ouvre le bloc d'édition. Au retour, on utilise directement le détail
+  /// renvoyé par le PUT : la carte ET le cercle sont mis à jour sans
+  /// nouvel appel réseau.
+  Future<void> _openEdit(LivingDetail detail) async {
+    final updated = await showEditLivingSheet(
+      context,
+      living: detail,
+      api: _livingApi,
+    );
+    if (updated == null || !mounted) return;
+
+    setState(() {
+      _detailFuture = Future.value(updated);
+      _livings = [
+        for (final l in _livings ?? <LivingSummary>[])
+          l.id == updated.id
+              ? LivingSummary(
+                  id: updated.id,
+                  name: updated.name,
+                  type: updated.type,
+                  avatarUrl: updated.avatarUrl,
+                )
+              : l,
+      ];
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${updated.name} updated'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: PawColors.textDark,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   void _onAddLiving() {
@@ -85,7 +128,7 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
             }
 
             // 3. Données récupérées
-            final livings = snapshot.data ?? [];
+            final livings = _livings ?? snapshot.data ?? [];
 
             if (livings.isEmpty) {
               return const Center(child: Text('Aucun élément enregistré.'));
@@ -152,8 +195,10 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
       future: _detailFuture,
       builder: (context, snapshot) {
         final Widget child;
+        final waiting = snapshot.connectionState != ConnectionState.done;
+        final data = snapshot.data;
 
-        if (snapshot.hasError) {
+        if (!waiting && snapshot.hasError) {
           child = _ErrorView(
             key: const ValueKey('detail_error'),
             message: 'Impossible de charger le détail.',
@@ -161,16 +206,18 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
               if (_selectedId != null) _selectLiving(_selectedId!);
             },
           );
-        } else if (snapshot.connectionState != ConnectionState.done ||
-            !snapshot.hasData) {
-          child = const LivingDetailCardSkeleton(
-            key: ValueKey('detail_loading'),
+        } else if (data != null && data.id == _selectedId) {
+          // On garde la carte affichée tant que c'est le même living
+          // (ex. juste après une édition) : pas de clignotement.
+          final editable = data.isDog || data.isPlant;
+          child = LivingDetailCard(
+            key: ValueKey('detail_${data.id}'),
+            living: data,
+            onEdit: editable ? () => _openEdit(data) : null,
           );
         } else {
-          final detail = snapshot.data!;
-          child = LivingDetailCard(
-            key: ValueKey('detail_${detail.id}'),
-            living: detail,
+          child = const LivingDetailCardSkeleton(
+            key: ValueKey('detail_loading'),
           );
         }
 
