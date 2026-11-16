@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -48,19 +46,11 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
   late final TextEditingController _weight;
   late final TextEditingController _species;
   late final TextEditingController _watering;
-  late final TextEditingController _avatarUrl;
-  late final TextEditingController _coverUrl;
 
   DateTime? _birthDate;
   DateTime? _acquisitionDate;
   String? _sex;
   String? _breed;
-
-  /// URLs affichées dans l'aperçu (mises à jour avec un petit délai
-  /// pour ne pas lancer une requête image à chaque lettre tapée).
-  String? _previewAvatar;
-  String? _previewCover;
-  Timer? _previewDebounce;
 
   bool _saving = false;
   String? _error;
@@ -76,29 +66,16 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
     _watering = TextEditingController(
       text: _living.wateringFrequencyDays?.toString() ?? '',
     );
-    _avatarUrl = TextEditingController(text: _living.avatarUrl ?? '');
-    _coverUrl = TextEditingController(text: _living.coverUrl ?? '');
 
     _birthDate = _living.birthDate;
     _acquisitionDate = _living.acquisitionDate;
     _sex = _living.sex;
     _breed = _living.breed;
-
-    _previewAvatar = _living.avatarUrl;
-    _previewCover = _living.coverUrl;
   }
 
   @override
   void dispose() {
-    _previewDebounce?.cancel();
-    for (final c in [
-      _name,
-      _weight,
-      _species,
-      _watering,
-      _avatarUrl,
-      _coverUrl,
-    ]) {
+    for (final c in [_name, _weight, _species, _watering]) {
       c.dispose();
     }
     super.dispose();
@@ -109,21 +86,8 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
     return w == w.roundToDouble() ? w.toStringAsFixed(0) : w.toString();
   }
 
-  void _onUrlChanged(String _) {
-    _previewDebounce?.cancel();
-    _previewDebounce = Timer(const Duration(milliseconds: 600), () {
-      if (!mounted) return;
-      setState(() {
-        _previewAvatar = _avatarUrl.text;
-        _previewCover = _coverUrl.text;
-      });
-    });
-  }
-
   UpdateLivingRequest _buildRequest() {
     final name = _name.text.trim();
-    final avatar = blankToNull(_avatarUrl.text);
-    final cover = blankToNull(_coverUrl.text);
 
     if (_living.isPlant) {
       return UpdatePlantRequest(
@@ -131,8 +95,6 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
         acquisitionDate: _acquisitionDate,
         species: blankToNull(_species.text),
         wateringFrequencyDays: int.tryParse(_watering.text.trim()),
-        avatarUrl: avatar,
-        coverUrl: cover,
       );
     }
     return UpdateDogRequest(
@@ -141,8 +103,6 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
       sex: _sex,
       weight: double.tryParse(_weight.text.trim().replaceAll(',', '.')),
       breed: _breed,
-      avatarUrl: avatar,
-      coverUrl: cover,
     );
   }
 
@@ -193,9 +153,11 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Photos actuelles (lecture seule : le changement
+                      // de photo passera par un upload, plus tard).
                       _PhotoPreview(
-                        avatarUrl: _previewAvatar,
-                        coverUrl: _previewCover,
+                        avatarUrl: _living.avatarUrl,
+                        coverUrl: _living.coverUrl,
                         isPlant: _living.isPlant,
                       ),
                       if (_error != null) _ErrorBanner(message: _error!),
@@ -210,28 +172,6 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
                       ...(_living.isPlant
                           ? _buildPlantFields()
                           : _buildDogFields()),
-                      const SectionLabel('Photos'),
-                      PawTextField(
-                        controller: _avatarUrl,
-                        label: 'Avatar URL (circle)',
-                        hint: '/avatar/my-pet.jpg',
-                        icon: Icons.account_circle_outlined,
-                        validator: validateImageUrl,
-                        onChanged: _onUrlChanged,
-                        keyboardType: TextInputType.url,
-                        enabled: !_saving,
-                      ),
-                      PawTextField(
-                        controller: _coverUrl,
-                        label: 'Cover URL (card)',
-                        hint: '/cover/my-pet.webp',
-                        helper: 'Server path (/cover/…) or full http(s) link',
-                        icon: Icons.image_outlined,
-                        validator: validateImageUrl,
-                        onChanged: _onUrlChanged,
-                        keyboardType: TextInputType.url,
-                        enabled: !_saving,
-                      ),
                     ],
                   ),
                 ),
@@ -407,7 +347,7 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
   }
 }
 
-/// Aperçu en direct : cover en fond + avatar rond par-dessus.
+/// Photos actuelles : cover en fond + avatar rond par-dessus.
 class _PhotoPreview extends StatelessWidget {
   final String? avatarUrl;
   final String? coverUrl;
@@ -469,25 +409,6 @@ class _PhotoPreview extends StatelessWidget {
                 child: SafeNetworkImage(
                   urls: [avatarUrl],
                   fallback: placeholder(26),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 12,
-            bottom: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Preview',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: PawColors.textDark,
                 ),
               ),
             ),

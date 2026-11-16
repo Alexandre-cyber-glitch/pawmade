@@ -15,19 +15,6 @@ String? validateName(String? value) {
   return null;
 }
 
-/// Vide = OK (null envoyé). Sinon `/chemin` ou `http(s)://…`.
-String? validateImageUrl(String? value) {
-  final v = value?.trim() ?? '';
-  if (v.isEmpty) return null;
-  if (v.contains(' ')) return 'No spaces allowed';
-  if (!(v.startsWith('/') ||
-      v.startsWith('http://') ||
-      v.startsWith('https://'))) {
-    return 'Must start with / or http(s)://';
-  }
-  return null;
-}
-
 /// Vide = OK. Sinon > 0, < 1000, 2 décimales max (@Positive @Digits(3,2)).
 String? validateWeight(String? value) {
   final v = value?.trim().replaceAll(',', '.') ?? '';

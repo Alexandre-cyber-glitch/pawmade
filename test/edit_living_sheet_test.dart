@@ -25,8 +25,8 @@ final dog = LivingDetail(
   id: 1,
   name: 'Warm Waffle',
   type: 'DOG',
-  avatarUrl: '/avatar/WarmWaffle.jpg',
-  coverUrl: '/cover/WarmeWaffle.webp',
+  avatarUrl: '/api/photos/00000000-0000-0000-0000-000000000001/content',
+  coverUrl: '/api/photos/00000000-0000-0000-0000-000000000002/content',
   birthDate: DateTime(2025, 6, 15),
   sex: 'MALE',
   weight: 12.5,
@@ -73,13 +73,6 @@ void main() {
       expect(validateName('a' * 51), isNotNull);
       expect(validateName('Buddy'), isNull);
     });
-    test('url', () {
-      expect(validateImageUrl(''), isNull);
-      expect(validateImageUrl('/avatar/a.jpg'), isNull);
-      expect(validateImageUrl('https://x.com/a.jpg'), isNull);
-      expect(validateImageUrl('avatar/a.jpg'), isNotNull);
-      expect(validateImageUrl('/a b.jpg'), isNotNull);
-    });
     test('weight', () {
       expect(validateWeight(''), isNull);
       expect(validateWeight('12,5'), isNull);
@@ -104,7 +97,10 @@ void main() {
     expect(json['type'], 'DOG');
     expect(json['birthDate'], '2025-06-05');
     expect(json['weight'], 12.5);
-    expect(json.containsKey('avatarUrl'), isTrue); // null explicite (PUT)
+    expect(json.containsKey('sex'), isTrue); // null explicite (PUT)
+    // Les URLs de photos sont calculées par le back : jamais envoyées.
+    expect(json.containsKey('avatarUrl'), isFalse);
+    expect(json.containsKey('coverUrl'), isFalse);
   });
 
   testWidgets('préremplit, envoie les modifs et renvoie le détail à jour', (
@@ -117,18 +113,15 @@ void main() {
     expect(find.text('Warm Waffle'), findsOneWidget); // champ Name prérempli
     expect(find.text('12.5'), findsOneWidget); // poids prérempli
 
+    // Plus de champs URL : les photos ne s'éditent pas ici.
+    expect(find.textContaining('URL'), findsNothing);
+
     await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Buddy');
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Cover URL (card)'),
-      '   ',
-    );
     await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
 
     final req = api.lastRequest as UpdateDogRequest;
     expect(req.name, 'Buddy');
-    expect(req.coverUrl, isNull); // champ vidé -> null, pas ""
-    expect(req.avatarUrl, '/avatar/WarmWaffle.jpg');
     expect(req.breed, 'GOLDEN_RETRIEVER');
     expect(req.weight, 12.5);
 

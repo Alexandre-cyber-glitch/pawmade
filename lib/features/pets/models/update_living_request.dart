@@ -1,5 +1,8 @@
 /// Corps du `PUT /api/living/{id}`.
 /// Le champ `type` sert de discriminant côté back (@JsonTypeInfo).
+///
+/// Les photos (avatar / cover) ne passent pas par ici : leurs URLs sont
+/// calculées par le back (`/api/photos/{id}/content`), on ne les renvoie pas.
 sealed class UpdateLivingRequest {
   const UpdateLivingRequest();
 
@@ -12,8 +15,6 @@ class UpdateDogRequest extends UpdateLivingRequest {
   final String? sex;
   final double? weight;
   final String? breed;
-  final String? avatarUrl;
-  final String? coverUrl;
 
   const UpdateDogRequest({
     required this.name,
@@ -21,8 +22,6 @@ class UpdateDogRequest extends UpdateLivingRequest {
     this.sex,
     this.weight,
     this.breed,
-    this.avatarUrl,
-    this.coverUrl,
   });
 
   @override
@@ -33,8 +32,6 @@ class UpdateDogRequest extends UpdateLivingRequest {
     'sex': sex,
     'weight': weight,
     'breed': breed,
-    'avatarUrl': avatarUrl,
-    'coverUrl': coverUrl,
   };
 }
 
@@ -43,16 +40,12 @@ class UpdatePlantRequest extends UpdateLivingRequest {
   final DateTime? acquisitionDate;
   final String? species;
   final int? wateringFrequencyDays;
-  final String? avatarUrl;
-  final String? coverUrl;
 
   const UpdatePlantRequest({
     required this.name,
     this.acquisitionDate,
     this.species,
     this.wateringFrequencyDays,
-    this.avatarUrl,
-    this.coverUrl,
   });
 
   @override
@@ -62,8 +55,6 @@ class UpdatePlantRequest extends UpdateLivingRequest {
     'acquisitionDate': formatApiDate(acquisitionDate),
     'species': species,
     'wateringFrequencyDays': wateringFrequencyDays,
-    'avatarUrl': avatarUrl,
-    'coverUrl': coverUrl,
   };
 }
 
