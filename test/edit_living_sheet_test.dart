@@ -1,7 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:pawmade/core/api_exception.dart';
 import 'package:pawmade/features/pets/models/living_detail.dart';
+import 'package:pawmade/features/pets/models/photo_upload.dart';
 import 'package:pawmade/features/pets/models/update_living_request.dart';
 import 'package:pawmade/features/pets/service/living_api.dart';
 import 'package:pawmade/features/pets/widgets/edit/edit_form_fields.dart';
@@ -12,6 +16,10 @@ class FakeLivingApi extends LivingApi {
   UpdateLivingRequest? lastRequest;
   ApiException? errorToThrow;
 
+  PhotoSlot? lastSlot;
+  List<int>? lastBytes;
+  String? lastFilename;
+
   @override
   Future<LivingDetail> update(int id, UpdateLivingRequest request) async {
     lastRequest = request;
@@ -19,7 +27,38 @@ class FakeLivingApi extends LivingApi {
     final json = request.toJson();
     return LivingDetail.fromJson({...json, 'id': id});
   }
+
+  @override
+  Future<LivingDetail> changePhoto(
+    int livingId,
+    PhotoSlot slot, {
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    lastSlot = slot;
+    lastBytes = bytes;
+    lastFilename = filename;
+    if (errorToThrow != null) throw errorToThrow!;
+    const newUrl = '/api/photos/new-photo/content';
+    return LivingDetail(
+      id: livingId,
+      name: dog.name,
+      type: dog.type,
+      avatarUrl: slot == PhotoSlot.avatar ? newUrl : dog.avatarUrl,
+      coverUrl: slot == PhotoSlot.cover ? newUrl : dog.coverUrl,
+    );
+  }
 }
+
+/// Sélecteur d'image factice (pas de vraie galerie en test).
+PickImage fakePicker(XFile? file) =>
+    () async => file;
+
+final pickedFile = XFile.fromData(
+  Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0]),
+  name: 'dog.jpg',
+  path: 'dog.jpg', // le vrai picker fournit toujours un chemin
+);
 
 final dog = LivingDetail(
   id: 1,
@@ -37,8 +76,10 @@ final dog = LivingDetail(
 Future<List<LivingDetail?>> pumpHost(
   WidgetTester tester,
   FakeLivingApi api,
-  LivingDetail living,
-) async {
+  LivingDetail living, {
+  PickImage? pickImage,
+  ValueChanged<LivingDetail>? onPhotoChanged,
+}) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
@@ -51,7 +92,13 @@ Future<List<LivingDetail?>> pumpHost(
           body: Center(
             child: ElevatedButton(
               onPressed: () async => results.add(
-                await showEditLivingSheet(context, living: living, api: api),
+                await showEditLivingSheet(
+                  context,
+                  living: living,
+                  api: api,
+                  pickImage: pickImage ?? fakePicker(null),
+                  onPhotoChanged: onPhotoChanged,
+                ),
               ),
               child: const Text('open'),
             ),
@@ -155,6 +202,86 @@ void main() {
     expect(find.text('Living 1 is a DOG, mismatch'), findsOneWidget);
     expect(find.text('Save changes'), findsOneWidget);
     expect(results, isEmpty);
+  });
+
+  group('changement de photo', () {
+    testWidgets('avatar : galerie -> upload -> écran prévenu', (tester) async {
+      final api = FakeLivingApi();
+      final changed = <LivingDetail>[];
+      await pumpHost(
+        tester,
+        api,
+        dog,
+        pickImage: fakePicker(pickedFile),
+        onPhotoChanged: changed.add,
+      );
+
+      await tester.tap(find.byTooltip('Change avatar'));
+      await tester.pumpAndSettle();
+
+      expect(api.lastSlot, PhotoSlot.avatar);
+      expect(api.lastBytes, [0xFF, 0xD8, 0xFF, 0xE0]);
+      expect(api.lastFilename, 'dog.jpg');
+      expect(changed.single.avatarUrl, '/api/photos/new-photo/content');
+      expect(changed.single.coverUrl, dog.coverUrl); // cover inchangée
+      expect(find.text('Save changes'), findsOneWidget); // bloc reste ouvert
+    });
+
+    testWidgets('cover : bon emplacement envoyé', (tester) async {
+      final api = FakeLivingApi();
+      final changed = <LivingDetail>[];
+      await pumpHost(
+        tester,
+        api,
+        dog,
+        pickImage: fakePicker(pickedFile),
+        onPhotoChanged: changed.add,
+      );
+
+      await tester.tap(find.text('Change cover'));
+      await tester.pumpAndSettle();
+
+      expect(api.lastSlot, PhotoSlot.cover);
+      expect(changed.single.coverUrl, '/api/photos/new-photo/content');
+    });
+
+    testWidgets('galerie annulée : aucun appel', (tester) async {
+      final api = FakeLivingApi();
+      final changed = <LivingDetail>[];
+      await pumpHost(tester, api, dog, onPhotoChanged: changed.add);
+
+      await tester.tap(find.text('Change cover'));
+      await tester.pumpAndSettle();
+
+      expect(api.lastSlot, isNull);
+      expect(changed, isEmpty);
+    });
+
+    testWidgets('erreur back : message affiché, écran non prévenu', (
+      tester,
+    ) async {
+      final api = FakeLivingApi()
+        ..errorToThrow = const ApiException(
+          'Only JPEG, PNG or WEBP images are accepted',
+        );
+      final changed = <LivingDetail>[];
+      await pumpHost(
+        tester,
+        api,
+        dog,
+        pickImage: fakePicker(pickedFile),
+        onPhotoChanged: changed.add,
+      );
+
+      await tester.tap(find.byTooltip('Change avatar'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Only JPEG, PNG or WEBP images are accepted'),
+        findsOneWidget,
+      );
+      expect(changed, isEmpty);
+    });
   });
 
   testWidgets('plante : champs plante, pas de champs chien', (tester) async {

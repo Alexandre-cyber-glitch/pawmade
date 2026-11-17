@@ -66,18 +66,37 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
   }
 
   /// Ouvre le bloc d'édition. Au retour, on utilise directement le détail
-  /// renvoyé par le PUT : la carte ET le cercle sont mis à jour sans
+  /// renvoyé par le back : la carte ET le cercle sont mis à jour sans
   /// nouvel appel réseau.
   Future<void> _openEdit(LivingDetail detail) async {
     final updated = await showEditLivingSheet(
       context,
       living: detail,
       api: _livingApi,
+      // Une photo changée est déjà enregistrée : on rafraîchit tout de suite.
+      onPhotoChanged: _applyDetail,
     );
     if (updated == null || !mounted) return;
 
+    _applyDetail(updated);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${updated.name} updated'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: PawColors.textDark,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Remplace le détail affiché et met à jour le cercle correspondant.
+  void _applyDetail(LivingDetail updated) {
+    if (!mounted) return;
     setState(() {
-      _detailFuture = Future.value(updated);
+      if (updated.id == _selectedId) {
+        _detailFuture = Future.value(updated);
+      }
       _livings = [
         for (final l in _livings ?? <LivingSummary>[])
           l.id == updated.id
@@ -90,15 +109,6 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
               : l,
       ];
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${updated.name} updated'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: PawColors.textDark,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void _onAddLiving() {

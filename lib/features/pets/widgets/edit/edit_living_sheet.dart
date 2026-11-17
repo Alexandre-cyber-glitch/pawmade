@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/api_exception.dart';
 import '../../../../core/theme/paw_colors.dart';
@@ -7,17 +8,40 @@ import '../../../../core/widgets/safe_network_image.dart';
 import '../../models/living_detail.dart';
 import '../../models/living_labels.dart';
 import '../../models/living_options.dart';
+import '../../models/photo_upload.dart';
 import '../../models/update_living_request.dart';
 import '../../service/living_api.dart';
 import 'edit_form_fields.dart';
 
+/// Ouvre un sélecteur d'image et renvoie le fichier choisi
+/// (`null` si l'utilisateur annule). Remplaçable dans les tests.
+typedef PickImage = Future<XFile?> Function();
+
+/// Galerie du téléphone (ou sélecteur de fichier sur web / desktop).
+/// Redimensionnée et compressée avant l'envoi : une photo de téléphone
+/// fait souvent 5-10 Mo, inutile pour un avatar ou une carte.
+/// La compression convertit aussi le HEIC des iPhone en JPEG
+/// (le back n'accepte que JPEG / PNG / WEBP).
+Future<XFile?> pickFromGallery() => ImagePicker().pickImage(
+  source: ImageSource.gallery,
+  maxWidth: 2048,
+  maxHeight: 2048,
+  imageQuality: 85,
+);
+
 /// Ouvre le bloc d'édition qui monte du bas.
 /// Renvoie le [LivingDetail] à jour si l'utilisateur a enregistré,
 /// `null` s'il a fermé sans enregistrer.
+///
+/// Un changement de photo est enregistré tout de suite côté back
+/// (indépendamment du bouton Save) : [onPhotoChanged] est alors appelé
+/// avec le détail à jour pour rafraîchir la carte et le cercle.
 Future<LivingDetail?> showEditLivingSheet(
   BuildContext context, {
   required LivingDetail living,
   required LivingApi api,
+  ValueChanged<LivingDetail>? onPhotoChanged,
+  PickImage pickImage = pickFromGallery,
 }) {
   return showModalBottomSheet<LivingDetail>(
     context: context,
@@ -25,15 +49,28 @@ Future<LivingDetail?> showEditLivingSheet(
     useSafeArea: true,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.35),
-    builder: (_) => EditLivingSheet(living: living, api: api),
+    builder: (_) => EditLivingSheet(
+      living: living,
+      api: api,
+      onPhotoChanged: onPhotoChanged,
+      pickImage: pickImage,
+    ),
   );
 }
 
 class EditLivingSheet extends StatefulWidget {
   final LivingDetail living;
   final LivingApi api;
+  final ValueChanged<LivingDetail>? onPhotoChanged;
+  final PickImage pickImage;
 
-  const EditLivingSheet({super.key, required this.living, required this.api});
+  const EditLivingSheet({
+    super.key,
+    required this.living,
+    required this.api,
+    this.onPhotoChanged,
+    this.pickImage = pickFromGallery,
+  });
 
   @override
   State<EditLivingSheet> createState() => _EditLivingSheetState();
@@ -52,10 +89,20 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
   String? _sex;
   String? _breed;
 
+  /// Photos affichées en haut du bloc (changent après un upload).
+  String? _avatarUrl;
+  String? _coverUrl;
+
+  /// Photo en cours d'envoi (pour afficher le loader au bon endroit).
+  PhotoSlot? _uploading;
+
   bool _saving = false;
   String? _error;
 
   LivingDetail get _living => widget.living;
+
+  /// Pendant un envoi (formulaire ou photo), on bloque les autres actions.
+  bool get _busy => _saving || _uploading != null;
 
   @override
   void initState() {
@@ -71,6 +118,8 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
     _acquisitionDate = _living.acquisitionDate;
     _sex = _living.sex;
     _breed = _living.breed;
+    _avatarUrl = _living.avatarUrl;
+    _coverUrl = _living.coverUrl;
   }
 
   @override
@@ -104,6 +153,50 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
       weight: double.tryParse(_weight.text.trim().replaceAll(',', '.')),
       breed: _breed,
     );
+  }
+
+  /// Galerie -> upload -> set avatar/cover, en une action.
+  Future<void> _changePhoto(PhotoSlot slot) async {
+    if (_busy) return;
+    setState(() => _error = null);
+
+    final XFile? file;
+    try {
+      file = await widget.pickImage();
+    } catch (e) {
+      debugPrint('Image picker KO : $e');
+      if (mounted) setState(() => _error = 'Cannot open the gallery.');
+      return;
+    }
+    if (file == null || !mounted) return; // annulé
+
+    setState(() => _uploading = slot);
+    try {
+      final bytes = await file.readAsBytes();
+      final updated = await widget.api.changePhoto(
+        _living.id,
+        slot,
+        bytes: bytes,
+        // Le back détecte le vrai format depuis les octets ;
+        // le nom sert juste à avoir une part multipart "fichier".
+        filename: file.name.isNotEmpty ? file.name : 'photo.jpg',
+      );
+      // Prévenir l'écran même si le bloc a été fermé entre-temps :
+      // la photo est déjà enregistrée côté back.
+      widget.onPhotoChanged?.call(updated);
+      if (!mounted) return;
+      setState(() {
+        _uploading = null;
+        _avatarUrl = updated.avatarUrl;
+        _coverUrl = updated.coverUrl;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploading = null;
+        _error = e.message;
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -153,12 +246,14 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Photos actuelles (lecture seule : le changement
-                      // de photo passera par un upload, plus tard).
+                      // Photos actuelles + boutons pour les changer
+                      // (enregistré tout de suite, sans attendre Save).
                       _PhotoPreview(
-                        avatarUrl: _living.avatarUrl,
-                        coverUrl: _living.coverUrl,
+                        avatarUrl: _avatarUrl,
+                        coverUrl: _coverUrl,
                         isPlant: _living.isPlant,
+                        uploading: _uploading,
+                        onChange: _busy ? null : _changePhoto,
                       ),
                       if (_error != null) _ErrorBanner(message: _error!),
                       const SectionLabel('Informations'),
@@ -315,7 +410,7 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
           width: double.infinity,
           height: 52,
           child: FilledButton(
-            onPressed: _saving ? null : _save,
+            onPressed: _busy ? null : _save,
             style: FilledButton.styleFrom(
               backgroundColor: PawColors.caramel,
               disabledBackgroundColor: PawColors.caramel.withValues(alpha: 0.6),
@@ -347,16 +442,25 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
   }
 }
 
-/// Photos actuelles : cover en fond + avatar rond par-dessus.
+/// Photos actuelles : cover en fond + avatar rond par-dessus,
+/// chacune avec un bouton pour la changer depuis la galerie.
 class _PhotoPreview extends StatelessWidget {
   final String? avatarUrl;
   final String? coverUrl;
   final bool isPlant;
 
+  /// Photo en cours d'envoi (loader affiché dessus).
+  final PhotoSlot? uploading;
+
+  /// `null` = boutons désactivés (envoi en cours).
+  final ValueChanged<PhotoSlot>? onChange;
+
   const _PhotoPreview({
     required this.avatarUrl,
     required this.coverUrl,
     required this.isPlant,
+    required this.uploading,
+    required this.onChange,
   });
 
   @override
@@ -369,51 +473,172 @@ class _PhotoPreview extends StatelessWidget {
       child: Icon(icon, size: size, color: PawColors.caramel),
     );
 
+    // Voile + loader pendant l'envoi.
+    Widget loaderOverlay() => Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: 0.35),
+        child: const Center(
+          child: SizedBox(
+            width: 26,
+            height: 26,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 30),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // ---------- Cover ----------
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: SizedBox(
               height: 130,
               width: double.infinity,
-              child: SafeNetworkImage(
-                urls: [coverUrl],
-                fallback: placeholder(40),
-                alignment: Alignment.topCenter,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  SafeNetworkImage(
+                    key: ValueKey(coverUrl),
+                    urls: [coverUrl],
+                    fallback: placeholder(40),
+                    alignment: Alignment.topCenter,
+                  ),
+                  if (uploading == PhotoSlot.cover) loaderOverlay(),
+                ],
               ),
             ),
           ),
           Positioned(
+            right: 10,
+            top: 10,
+            child: _ChangePhotoPill(
+              label: 'Change cover',
+              onTap: onChange == null ? null : () => onChange!(PhotoSlot.cover),
+            ),
+          ),
+
+          // ---------- Avatar ----------
+          Positioned(
             left: 16,
             bottom: -28,
-            child: Container(
-              width: 72,
-              height: 72,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white,
-                border: Border.all(color: PawColors.caramel, width: 2.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: SafeNetworkImage(
-                  urls: [avatarUrl],
-                  fallback: placeholder(26),
+            child: Tooltip(
+              message: 'Change avatar',
+              child: GestureDetector(
+                onTap: onChange == null
+                    ? null
+                    : () => onChange!(PhotoSlot.avatar),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        border: Border.all(
+                          color: PawColors.caramel,
+                          width: 2.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            SafeNetworkImage(
+                              key: ValueKey(avatarUrl),
+                              urls: [avatarUrl],
+                              fallback: placeholder(26),
+                            ),
+                            if (uploading == PhotoSlot.avatar) loaderOverlay(),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Petite pastille appareil photo.
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: onChange == null
+                              ? PawColors.caramel.withValues(alpha: 0.6)
+                              : PawColors.caramel,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.photo_camera,
+                          size: 13,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Bouton blanc arrondi posé sur la cover.
+class _ChangePhotoPill extends StatelessWidget {
+  final String label;
+  final VoidCallback? onTap;
+
+  const _ChangePhotoPill({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: onTap == null ? 0.6 : 0.92),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.photo_camera_outlined,
+                size: 15,
+                color: PawColors.textDark,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: PawColors.textDark,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

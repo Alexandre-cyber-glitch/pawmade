@@ -5,6 +5,7 @@ import '../../../core/api_config.dart';
 import '../../../core/api_exception.dart';
 import '../models/living_detail.dart';
 import '../models/living_summary.dart';
+import '../models/photo_upload.dart';
 import '../models/update_living_request.dart';
 
 class LivingApi {
@@ -65,6 +66,72 @@ class LivingApi {
     }
   }
 
+  /// Change l'avatar ou la cover en une seule action côté UI :
+  /// 1. `POST /api/living/{id}/photos` (upload du fichier)
+  /// 2. `PUT  /api/living/{id}/avatar|cover` avec l'id de la photo créée.
+  /// Renvoie le détail à jour (avec la nouvelle URL).
+  Future<LivingDetail> changePhoto(
+    int livingId,
+    PhotoSlot slot, {
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    final photo = await uploadPhoto(livingId, bytes: bytes, filename: filename);
+    return setPhoto(livingId, slot, photo.id);
+  }
+
+  /// `POST /api/living/{id}/photos` (multipart, champ `file`).
+  Future<PhotoUpload> uploadPhoto(
+    int livingId, {
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    try {
+      final form = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: filename),
+      });
+      final response = await _dio.post(
+        '/api/living/$livingId/photos',
+        data: form,
+        // Un upload prend plus de temps qu'un simple GET.
+        options: Options(
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
+      return PhotoUpload.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      debugPrint('ERREUR LIVING API uploadPhoto($livingId) : $e');
+      throw _toApiException(e);
+    } catch (e, stackTrace) {
+      debugPrint('ERREUR LIVING API uploadPhoto($livingId) : $e\n$stackTrace');
+      throw const ApiException('Upload failed. Please try again.');
+    }
+  }
+
+  /// `PUT /api/living/{id}/avatar|cover` `{ "photoId": "…" }`.
+  Future<LivingDetail> setPhoto(
+    int livingId,
+    PhotoSlot slot,
+    String photoId,
+  ) async {
+    try {
+      final response = await _dio.put(
+        '/api/living/$livingId/${slot.path}',
+        data: {'photoId': photoId},
+      );
+      return LivingDetail.fromJson(
+        response.data['living'] as Map<String, dynamic>,
+      );
+    } on DioException catch (e) {
+      debugPrint('ERREUR LIVING API setPhoto($livingId, ${slot.path}) : $e');
+      throw _toApiException(e);
+    } catch (e, stackTrace) {
+      debugPrint('ERREUR LIVING API setPhoto : $e\n$stackTrace');
+      throw const ApiException('Something went wrong. Please try again.');
+    }
+  }
+
   static ApiException _toApiException(DioException e) {
     final status = e.response?.statusCode;
     final data = e.response?.data;
@@ -76,6 +143,7 @@ class LivingApi {
     return switch (status) {
       400 => ApiException('Some fields are invalid.', statusCode: status),
       404 => ApiException('This pet no longer exists.', statusCode: status),
+      413 => ApiException('Image too large (max 10 MB).', statusCode: status),
       null => const ApiException('Server unreachable. Check your connection.'),
       _ => ApiException('Server error ($status).', statusCode: status),
     };
