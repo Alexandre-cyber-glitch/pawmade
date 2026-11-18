@@ -11,13 +11,20 @@ import '../models/update_living_request.dart';
 class LivingApi {
   static const String baseUrl = ApiConfig.baseUrl;
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-    ),
-  );
+  final Dio _dio;
+
+  /// [dio] est optionnel : les tests en passent un avec un faux adaptateur
+  /// HTTP pour simuler les réponses du back sans serveur.
+  LivingApi({Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              baseUrl: baseUrl,
+              connectTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
+            ),
+          );
 
   /// `GET /api/living` -> liste légère pour les cercles.
   Future<List<LivingSummary>> findAll() async {

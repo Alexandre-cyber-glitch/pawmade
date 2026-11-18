@@ -9,7 +9,10 @@ import '../../../core/theme/paw_colors.dart';
 import '../widgets/edit/edit_living_sheet.dart';
 
 class MyLivingsScreen extends StatefulWidget {
-  const MyLivingsScreen({super.key});
+  /// Optionnel : les tests injectent une fausse API.
+  final LivingApi? api;
+
+  const MyLivingsScreen({super.key, this.api});
 
   @override
   State<MyLivingsScreen> createState() => _MyLivingsScreenState();
@@ -18,7 +21,7 @@ class MyLivingsScreen extends StatefulWidget {
 class _MyLivingsScreenState extends State<MyLivingsScreen> {
   static const _textDark = Color(0xFF2D2A26);
 
-  final LivingApi _livingApi = LivingApi();
+  late final LivingApi _livingApi = widget.api ?? LivingApi();
 
   /// Liste légère pour les cercles (GET /api/living).
   late Future<List<LivingSummary>> _livingsFuture;
@@ -51,18 +54,28 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
       }
       return livings;
     });
+    _livingsFuture.ignore(); // même raison que dans _selectLiving
   }
 
   void _selectLiving(int id) {
+    final future = _livingApi.findById(id);
+    // L'erreur peut arriver avant que le FutureBuilder ne s'abonne :
+    // on la marque comme "gérée" (le FutureBuilder la reçoit quand même
+    // et affiche le message + Réessayer).
+    future.ignore();
     setState(() {
       _selectedId = id;
-      _detailFuture = _livingApi.findById(id);
+      _detailFuture = future;
     });
   }
 
   Future<void> _refresh() async {
     setState(_loadLivings);
-    await _livingsFuture;
+    try {
+      await _livingsFuture;
+    } catch (_) {
+      // Erreur déjà affichée par le FutureBuilder (vue Réessayer).
+    }
   }
 
   /// Ouvre le bloc d'édition. Au retour, on utilise directement le détail
