@@ -249,9 +249,80 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-/// Carte "fantôme" affichée pendant le chargement du détail.
+/// Carte "fantôme" : même forme que la vraie carte, mais vide.
+///
+/// - par défaut : loader au centre (chargement en cours) ;
+/// - avec [message] : icône "hors ligne", le message et un bouton
+///   [onRetry] (serveur injoignable, erreur de chargement…).
 class LivingDetailCardSkeleton extends StatelessWidget {
-  const LivingDetailCardSkeleton({super.key});
+  final String? message;
+  final String? hint;
+  final VoidCallback? onRetry;
+
+  /// Icône affichée avec [message].
+  final IconData icon;
+
+  const LivingDetailCardSkeleton({
+    super.key,
+    this.message,
+    this.hint,
+    this.onRetry,
+    this.icon = Icons.cloud_off_rounded,
+  });
+
+  Widget _photoContent() {
+    if (message == null) {
+      return const SizedBox(
+        width: 28,
+        height: 28,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.5,
+          color: Color(0xFFB58A62),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 34, color: const Color(0xFFB58A62)),
+          const SizedBox(height: 8),
+          Text(
+            message!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: LivingDetailCard._textDark,
+            ),
+          ),
+          if (hint != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              hint!,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+            ),
+          ],
+          if (onRetry != null) ...[
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Réessayer'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFB58A62),
+                visualDensity: VisualDensity.compact,
+                shape: const StadiumBorder(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -277,17 +348,10 @@ class LivingDetailCardSkeleton extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            height: 175,
+            height: LivingDetailCard._photoHeight,
             color: shade,
             alignment: Alignment.center,
-            child: const SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: Color(0xFFB58A62),
-              ),
-            ),
+            child: _photoContent(),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),

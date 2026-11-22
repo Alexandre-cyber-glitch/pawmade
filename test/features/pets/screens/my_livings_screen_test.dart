@@ -90,12 +90,18 @@ void main() {
     api.onFindAll = () => list.future;
 
     await pumpScreen(tester, api);
+    // Template pendant le chargement : en-tête, 3 cercles fantômes,
+    // bouton Add Pet, carte vide avec loader.
+    expect(find.text('My Pets'), findsOneWidget);
+    expect(find.byType(PlaceholderAvatar), findsNWidgets(3));
+    expect(find.byType(AddLivingAvatar, skipOffstage: false), findsOneWidget);
+    expect(find.byType(LivingDetailCardSkeleton), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     list.complete(summaries);
     await tester.pumpAndSettle();
 
-    expect(find.text('My Pets'), findsOneWidget);
+    expect(find.byType(PlaceholderAvatar), findsNothing);
     expect(circle('Albert'), findsOneWidget);
     expect(api.findByIdCalls, [1]); // seul le sélectionné est chargé
     expect(cardText('Warm Waffle'), findsOneWidget);
@@ -122,16 +128,44 @@ void main() {
     expect(api.findByIdCalls, [1, 2, 2]);
   });
 
-  testWidgets('liste vide : message', (tester) async {
+  testWidgets('liste vide : template avec Add Pet + message', (tester) async {
     final api = FakeScreenApi()..onFindAll = () async => [];
     await pumpScreen(tester, api);
     await tester.pumpAndSettle();
 
-    expect(find.text('Aucun élément enregistré.'), findsOneWidget);
+    expect(find.text('My Pets'), findsOneWidget);
+    expect(find.byType(AddLivingAvatar), findsOneWidget);
+    expect(find.text('Aucun compagnon pour l\'instant'), findsOneWidget);
+    expect(find.text('Réessayer'), findsNothing); // rien à réessayer
     expect(api.findByIdCalls, isEmpty);
   });
 
-  testWidgets('erreur de liste : bouton Réessayer qui relance', (
+  testWidgets('serveur injoignable : template + Réessayer qui relance', (
+    tester,
+  ) async {
+    final api = FakeScreenApi()
+      ..onFindAll = () async => throw const ApiException('down');
+    await pumpScreen(tester, api);
+    await tester.pumpAndSettle(); // pas d'animation infinie hors ligne
+
+    // La mise en page reste là : en-tête, cercles fantômes, carte vide.
+    expect(find.text('My Pets'), findsOneWidget);
+    expect(find.byType(PlaceholderAvatar), findsNWidgets(3));
+    expect(find.byType(AddLivingAvatar, skipOffstage: false), findsOneWidget);
+    expect(find.text('Impossible de joindre le serveur'), findsOneWidget);
+    expect(find.byIcon(Icons.cloud_off_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    api.onFindAll = () async => summaries;
+    await tester.tap(find.text('Réessayer'));
+    await tester.pumpAndSettle();
+
+    expect(api.findAllCalls, 2);
+    expect(find.byType(PlaceholderAvatar), findsNothing);
+    expect(cardText('Warm Waffle'), findsOneWidget);
+  });
+
+  testWidgets('serveur injoignable : tirer vers le bas relance aussi', (
     tester,
   ) async {
     final api = FakeScreenApi()
@@ -139,14 +173,12 @@ void main() {
     await pumpScreen(tester, api);
     await tester.pumpAndSettle();
 
-    expect(find.text('Impossible de charger tes éléments.'), findsOneWidget);
-
     api.onFindAll = () async => summaries;
-    await tester.tap(find.text('Réessayer'));
+    await tester.fling(find.text('My Pets'), const Offset(0, 400), 1000);
     await tester.pumpAndSettle();
 
     expect(api.findAllCalls, 2);
-    expect(cardText('Warm Waffle'), findsOneWidget);
+    expect(circle('Albert'), findsOneWidget);
   });
 
   testWidgets('erreur de détail : message + Réessayer, cercles visibles', (
@@ -157,7 +189,8 @@ void main() {
     await pumpScreen(tester, api);
     await tester.pumpAndSettle();
 
-    expect(find.text('Impossible de charger le détail.'), findsOneWidget);
+    expect(find.text('Impossible de charger le détail'), findsOneWidget);
+    expect(find.byType(LivingDetailCardSkeleton), findsOneWidget);
     expect(circle('Albert'), findsOneWidget);
 
     api.onFindById = (id) async => details[id]!;

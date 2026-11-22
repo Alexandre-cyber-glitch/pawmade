@@ -87,6 +87,55 @@ void main() {
     });
   });
 
+  group('LivingDetailCardSkeleton', () {
+    testWidgets('par défaut : loader, pas de bouton', (tester) async {
+      await pump(tester, const LivingDetailCardSkeleton());
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.text('Réessayer'), findsNothing);
+    });
+
+    testWidgets('avec message : icône, textes, Réessayer cliquable', (
+      tester,
+    ) async {
+      var retries = 0;
+      await pump(
+        tester,
+        LivingDetailCardSkeleton(
+          message: 'Impossible de joindre le serveur',
+          hint: 'Vérifie ta connexion',
+          onRetry: () => retries++,
+        ),
+      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byIcon(Icons.cloud_off_rounded), findsOneWidget);
+      expect(find.text('Impossible de joindre le serveur'), findsOneWidget);
+      expect(find.text('Vérifie ta connexion'), findsOneWidget);
+
+      await tester.tap(find.text('Réessayer'));
+      expect(retries, 1);
+    });
+  });
+
+  group('PlaceholderAvatar', () {
+    testWidgets('statique : pas d\'animation en cours', (tester) async {
+      await pump(tester, const PlaceholderAvatar());
+      expect(find.byType(PlaceholderAvatar), findsOneWidget);
+      // pumpAndSettle échouerait si une animation tournait en boucle.
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('animate : pulse, puis s\'arrête quand animate passe à false', (
+      tester,
+    ) async {
+      await pump(tester, const PlaceholderAvatar(animate: true));
+      expect(tester.hasRunningAnimations, isTrue);
+
+      await pump(tester, const PlaceholderAvatar());
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isFalse);
+    });
+  });
+
   group('LivingAvatarItem', () {
     testWidgets('affiche nom + type et réagit au tap', (tester) async {
       var taps = 0;

@@ -136,17 +136,26 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
         child: FutureBuilder<List<LivingSummary>>(
           future: _livingsFuture,
           builder: (context, snapshot) {
-            // 1. Chargement
+            // 1. Chargement : le "template" de l'écran (cercles pointillés
+            //    qui pulsent + carte vide avec loader).
             if (snapshot.connectionState == ConnectionState.waiting &&
                 !snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
+              return _buildLayout(
+                circles: _placeholderCircles(animate: true),
+                card: const LivingDetailCardSkeleton(),
+              );
             }
 
-            // 2. Erreur
+            // 2. Erreur (serveur éteint, pas de réseau…) : même template,
+            //    la carte explique le problème et propose de réessayer.
             if (snapshot.hasError) {
-              return _ErrorView(
-                message: 'Impossible de charger tes éléments.',
-                onRetry: () => setState(_loadLivings),
+              return _buildLayout(
+                circles: _placeholderCircles(animate: false),
+                card: LivingDetailCardSkeleton(
+                  message: 'Impossible de joindre le serveur',
+                  hint: 'Vérifie ta connexion, puis réessaie.',
+                  onRetry: () => setState(_loadLivings),
+                ),
               );
             }
 
@@ -154,64 +163,91 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
             final livings = _livings ?? snapshot.data ?? [];
 
             if (livings.isEmpty) {
-              return const Center(child: Text('Aucun élément enregistré.'));
+              return _buildLayout(
+                circles: const [],
+                card: const LivingDetailCardSkeleton(
+                  icon: Icons.pets,
+                  message: 'Aucun compagnon pour l\'instant',
+                  hint: 'Ajoute ton premier avec « Add Pet ».',
+                ),
+              );
             }
 
-            return RefreshIndicator(
-              onRefresh: _refresh,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // En-tête
-                    const Text(
-                      'My Pets',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        color: _textDark,
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Cercles (stories)
-                    SizedBox(
-                      height: 140,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        clipBehavior: Clip.none,
-                        children: [
-                          ...livings.map(
-                            (living) => Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: LivingAvatarItem(
-                                living: living,
-                                isSelected: living.id == _selectedId,
-                                onTap: () => _selectLiving(living.id),
-                              ),
-                            ),
-                          ),
-                          AddLivingAvatar(onTap: _onAddLiving),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Carte du living sélectionné
-                    _buildDetail(),
-                  ],
-                ),
-              ),
+            return _buildLayout(
+              circles: [
+                for (final living in livings)
+                  LivingAvatarItem(
+                    living: living,
+                    isSelected: living.id == _selectedId,
+                    onTap: () => _selectLiving(living.id),
+                  ),
+              ],
+              card: _buildDetail(),
             );
           },
         ),
       ),
     );
   }
+
+  /// Mise en page commune à tous les états : en-tête, cercles + "Add Pet",
+  /// puis la carte. Tirer vers le bas recharge toujours la liste.
+  Widget _buildLayout({required List<Widget> circles, required Widget card}) {
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // En-tête
+            const Text(
+              'My Pets',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: _textDark,
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Cercles (stories)
+            SizedBox(
+              height: 140,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                clipBehavior: Clip.none,
+                children: [
+                  for (final circle in circles)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: circle,
+                    ),
+                  AddLivingAvatar(onTap: _onAddLiving),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Carte du milieu
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: card,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 3 cercles fantômes en pointillés.
+  List<Widget> _placeholderCircles({required bool animate}) => [
+    for (var i = 0; i < 3; i++)
+      PlaceholderAvatar(key: ValueKey('placeholder_$i'), animate: animate),
+  ];
 
   Widget _buildDetail() {
     return FutureBuilder<LivingDetail>(
@@ -222,9 +258,10 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
         final data = snapshot.data;
 
         if (!waiting && snapshot.hasError) {
-          child = _ErrorView(
+          child = LivingDetailCardSkeleton(
             key: const ValueKey('detail_error'),
-            message: 'Impossible de charger le détail.',
+            message: 'Impossible de charger le détail',
+            hint: 'Vérifie ta connexion, puis réessaie.',
             onRetry: () {
               if (_selectedId != null) _selectLiving(_selectedId!);
             },
@@ -249,30 +286,6 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
           child: child,
         );
       },
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-
-  const _ErrorView({super.key, required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(message),
-            const SizedBox(height: 12),
-            ElevatedButton(onPressed: onRetry, child: const Text('Réessayer')),
-          ],
-        ),
-      ),
     );
   }
 }

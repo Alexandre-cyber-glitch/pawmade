@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+/// Cercle en pointillés, avec un [child] centré dedans.
+/// Le rayon et le nombre de points s'adaptent à [size].
 class DottedCircle extends StatelessWidget {
   final double size;
   final Color color;
@@ -32,28 +34,28 @@ class _DottedCirclePainter extends CustomPainter {
 
   _DottedCirclePainter({required this.color});
 
+  static const _dotRadius = 1.6;
+
+  /// Espace approximatif entre deux points (en px).
+  static const _spacing = 7.0;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.8;
+      ..style = PaintingStyle.fill;
 
-    const dashCount = 40;
-    const radius = 33.0;
-    const dotRadius = 1.2;
-
+    final radius = min(size.width, size.height) / 2 - _dotRadius;
+    final dashCount = max(12, (2 * pi * radius / _spacing).round());
     final center = Offset(size.width / 2, size.height / 2);
 
-    for (int i = 0; i < dashCount; i++) {
-      final angle = (i * 2 * 3.141592653589793) / dashCount;
-
+    for (var i = 0; i < dashCount; i++) {
+      final angle = i * 2 * pi / dashCount;
       final position = Offset(
         center.dx + radius * cos(angle),
         center.dy + radius * sin(angle),
       );
-
-      canvas.drawCircle(position, dotRadius, paint);
+      canvas.drawCircle(position, _dotRadius, paint);
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/widgets/safe_network_image.dart';
 import '../models/living_summary.dart';
+import 'dotted_circle.dart';
 
 class LivingAvatarItem extends StatelessWidget {
   final LivingSummary living;
@@ -88,6 +89,97 @@ class LivingAvatarItem extends StatelessWidget {
               living.typeLabel,
               style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Cercle "fantôme" en pointillés : affiché quand on n'a pas (encore)
+/// la liste du serveur (chargement ou hors connexion), pour garder
+/// la mise en page de l'écran.
+class PlaceholderAvatar extends StatefulWidget {
+  /// `true` pendant le chargement : léger effet de pulsation.
+  final bool animate;
+
+  const PlaceholderAvatar({super.key, this.animate = false});
+
+  @override
+  State<PlaceholderAvatar> createState() => _PlaceholderAvatarState();
+}
+
+class _PlaceholderAvatarState extends State<PlaceholderAvatar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+    lowerBound: 0.45,
+    upperBound: 1,
+    value: 1,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(PlaceholderAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animate != widget.animate) _syncAnimation();
+  }
+
+  void _syncAnimation() {
+    if (widget.animate) {
+      _pulse.repeat(reverse: true);
+    } else {
+      _pulse
+        ..stop()
+        ..value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const caramel = Color(0xFFB58A62);
+    const shade = Color(0xFFEFE8DE);
+
+    Widget bar(double width, double height) => Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: shade,
+        borderRadius: BorderRadius.circular(6),
+      ),
+    );
+
+    return FadeTransition(
+      opacity: _pulse,
+      child: SizedBox(
+        width: LivingAvatarItem.size + 8,
+        child: Column(
+          children: [
+            DottedCircle(
+              size: LivingAvatarItem.size,
+              color: caramel.withValues(alpha: 0.55),
+              child: Icon(
+                Icons.pets,
+                size: 28,
+                color: caramel.withValues(alpha: 0.35),
+              ),
+            ),
+            const SizedBox(height: 10),
+            bar(52, 11), // nom
+            const SizedBox(height: 5),
+            bar(32, 9), // type
           ],
         ),
       ),
