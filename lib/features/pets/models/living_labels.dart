@@ -25,3 +25,32 @@ String ageLabelFor(DateTime birthDate, {DateTime? now}) {
   final years = months ~/ 12;
   return '$years ${years == 1 ? 'Year' : 'Years'}';
 }
+
+/// Nombre de jours avant le prochain anniversaire (0 = aujourd'hui).
+/// Un 29 février est fêté le 1er mars les années non bissextiles.
+/// Renvoie null si la naissance est aujourd'hui ou dans le futur.
+int? daysUntilBirthday(DateTime birthDate, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  // En UTC : un jour fait toujours 24 h (pas de changement d'heure).
+  final today = DateTime.utc(n.year, n.month, n.day);
+  final birth = DateTime.utc(birthDate.year, birthDate.month, birthDate.day);
+  if (!birth.isBefore(today)) return null;
+
+  var next = DateTime.utc(today.year, birth.month, birth.day);
+  if (next.isBefore(today)) {
+    next = DateTime.utc(today.year + 1, birth.month, birth.day);
+  }
+  return next.difference(today).inDays;
+}
+
+/// "Birthday today!", "Birthday tomorrow", "Birthday in 12 days",
+/// ou null si l'anniversaire est dans plus de 30 jours.
+String? birthdayLabelFor(DateTime birthDate, {DateTime? now}) {
+  final days = daysUntilBirthday(birthDate, now: now);
+  if (days == null || days > 30) return null;
+  return switch (days) {
+    0 => 'Birthday today!',
+    1 => 'Birthday tomorrow',
+    _ => 'Birthday in $days days',
+  };
+}

@@ -81,6 +81,10 @@ class LivingDetail {
   /// "3 Years", "1 Year", "5 Months"
   String? get ageLabel => birthDate == null ? null : ageLabelFor(birthDate!);
 
+  /// "Birthday in 12 days" si l'anniversaire approche, sinon null.
+  String? get birthdayLabel =>
+      birthDate == null ? null : birthdayLabelFor(birthDate!);
+
   /// 12.5 -> "12.5 kg", 28.0 -> "28 kg"
   String? get weightLabel {
     if (weight == null) return null;

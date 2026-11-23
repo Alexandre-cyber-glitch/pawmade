@@ -169,6 +169,7 @@ class LivingDetailCard extends StatelessWidget {
   List<Widget> _infoChips() {
     if (living.isDog) {
       final sex = living.sex;
+      final birthday = living.birthdayLabel;
       return [
         _InfoChip(
           icon: sex == 'FEMALE' ? Icons.female : Icons.male,
@@ -185,6 +186,12 @@ class LivingDetailCard extends StatelessWidget {
           icon: Icons.monitor_weight_outlined,
           label: living.weightLabel ?? '- kg',
         ),
+        if (birthday != null)
+          _InfoChip(
+            icon: Icons.cake_outlined,
+            iconColor: const Color(0xFFE07A9B),
+            label: birthday,
+          ),
       ];
     }
 

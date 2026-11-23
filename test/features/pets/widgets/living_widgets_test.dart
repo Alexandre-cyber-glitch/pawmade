@@ -73,6 +73,27 @@ void main() {
       expect(find.byIcon(Icons.local_florist), findsOneWidget); // placeholder
     });
 
+    testWidgets('puce anniversaire seulement quand il approche', (
+      tester,
+    ) async {
+      final now = DateTime.now();
+      Widget card(DateTime birth) => LivingDetailCard(
+        living: LivingDetail(
+          id: 1,
+          name: 'Enzo',
+          type: 'DOG',
+          birthDate: birth,
+        ),
+      );
+
+      await pump(tester, card(DateTime(now.year - 4, now.month, now.day + 5)));
+      expect(find.byIcon(Icons.cake_outlined), findsOneWidget);
+      expect(find.textContaining('Birthday'), findsOneWidget);
+
+      await pump(tester, card(DateTime(now.year - 4, now.month + 4, now.day)));
+      expect(find.byIcon(Icons.cake_outlined), findsNothing);
+    });
+
     testWidgets('bouton Edit appelle onEdit', (tester) async {
       var taps = 0;
       await pump(

@@ -55,6 +55,49 @@ void main() {
     });
   });
 
+  group('anniversaire', () {
+    final birth = DateTime(2025, 6, 15);
+    String? label(int y, int m, int d, {DateTime? from}) =>
+        birthdayLabelFor(from ?? birth, now: DateTime(y, m, d, 23, 30));
+
+    test('libellé selon le nombre de jours restants', () {
+      expect(label(2026, 6, 15), 'Birthday today!');
+      expect(label(2026, 6, 14), 'Birthday tomorrow');
+      expect(label(2026, 6, 3), 'Birthday in 12 days');
+    });
+
+    test('affiché à 30 jours, masqué à 31 et juste après', () {
+      expect(label(2026, 5, 16), 'Birthday in 30 days');
+      expect(label(2026, 5, 15), isNull);
+      expect(label(2026, 6, 16), isNull);
+    });
+
+    test("passage à l'année suivante", () {
+      expect(
+        label(2026, 12, 30, from: DateTime(2024, 1, 2)),
+        'Birthday in 3 days',
+      );
+    });
+
+    test("changement d'heure : pas de jour perdu", () {
+      expect(
+        label(2026, 3, 28, from: DateTime(2024, 3, 30)),
+        'Birthday in 2 days',
+      );
+    });
+
+    test('né un 29 février', () {
+      final leap = DateTime(2024, 2, 29);
+      expect(label(2026, 3, 1, from: leap), 'Birthday today!');
+      expect(label(2028, 2, 29, from: leap), 'Birthday today!');
+    });
+
+    test("naissance aujourd'hui ou future : rien", () {
+      expect(label(2025, 6, 15), isNull);
+      expect(label(2025, 6, 1), isNull);
+    });
+  });
+
   group('LivingSummary', () {
     test('fromJson avec la réponse réelle du back', () {
       final s = LivingSummary.fromJson({
