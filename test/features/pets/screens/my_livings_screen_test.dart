@@ -39,8 +39,7 @@ final details = {
 /// et on compte les appels.
 class FakeScreenApi extends LivingApi {
   Future<List<LivingSummary>> Function() onFindAll = () async => summaries;
-  Future<LivingDetail> Function(int id) onFindById = (id) async =>
-      details[id]!;
+  Future<LivingDetail> Function(int id) onFindById = (id) async => details[id]!;
 
   int findAllCalls = 0;
   final findByIdCalls = <int>[];
@@ -222,5 +221,84 @@ void main() {
     expect(find.text('Buddy updated'), findsOneWidget); // SnackBar
     expect(api.findAllCalls, 1); // pas de rechargement réseau
     expect(api.findByIdCalls, [1]);
+  });
+
+  group('swipe sur la carte', () {
+    const left = Offset(-200, 0);
+    const right = Offset(200, 0);
+
+    testWidgets('gauche -> suivant, droite -> précédent', (tester) async {
+      final api = FakeScreenApi();
+      await pumpScreen(tester, api);
+      await tester.pumpAndSettle();
+
+      await tester.fling(find.byType(LivingDetailCard), left, 1000);
+      await tester.pumpAndSettle();
+      expect(cardText('Albert'), findsOneWidget);
+
+      await tester.fling(find.byType(LivingDetailCard), right, 1000);
+      await tester.pumpAndSettle();
+      expect(cardText('Warm Waffle'), findsOneWidget);
+      expect(api.findByIdCalls, [1, 2, 1]);
+    });
+
+    testWidgets('aux extrémités : rien ne se passe', (tester) async {
+      final api = FakeScreenApi();
+      await pumpScreen(tester, api);
+      await tester.pumpAndSettle();
+
+      await tester.fling(find.byType(LivingDetailCard), right, 1000);
+      await tester.pumpAndSettle();
+      expect(api.findByIdCalls, [1]);
+
+      await tester.fling(find.byType(LivingDetailCard), left, 1000);
+      await tester.pumpAndSettle();
+      await tester.fling(find.byType(LivingDetailCard), left, 1000);
+      await tester.pumpAndSettle();
+      expect(api.findByIdCalls, [1, 2]);
+    });
+
+    testWidgets('glissement lent : long accepté, court ignoré', (tester) async {
+      final api = FakeScreenApi();
+      await pumpScreen(tester, api);
+      await tester.pumpAndSettle();
+
+      Future<void> slowDrag(double dx) async {
+        await tester.timedDrag(
+          find.byType(LivingDetailCard),
+          Offset(dx, 0),
+          const Duration(seconds: 1),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await slowDrag(-50);
+      expect(api.findByIdCalls, [1]);
+      await slowDrag(-200);
+      expect(api.findByIdCalls, [1, 2]);
+    });
+
+    testWidgets('la rangée défile pour montrer le cercle choisi', (
+      tester,
+    ) async {
+      final many = [
+        for (var i = 1; i <= 6; i++)
+          LivingSummary(id: i, name: 'Pet $i', type: 'DOG'),
+      ];
+      final api = FakeScreenApi()
+        ..onFindAll = (() async => many)
+        ..onFindById = (id) async =>
+            LivingDetail(id: id, name: 'Pet $id', type: 'DOG');
+      await pumpScreen(tester, api);
+      await tester.pumpAndSettle();
+
+      for (var i = 0; i < 5; i++) {
+        await tester.fling(find.byType(LivingDetailCard), left, 1000);
+        await tester.pumpAndSettle();
+      }
+
+      expect(cardText('Pet 6'), findsOneWidget);
+      expect(circle('Pet 6').hitTestable(), findsOneWidget); // bien visible
+    });
   });
 }

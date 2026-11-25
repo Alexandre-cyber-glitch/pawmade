@@ -37,10 +37,65 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
   /// Re-fetché à chaque clic pour avoir les infos à jour.
   Future<LivingDetail>? _detailFuture;
 
+  /// Défilement de la rangée de cercles.
+  final _circlesController = ScrollController();
+
+  static const _circleSpacing = 12.0;
+
+  /// Distance (px) ou vitesse (px/s) à partir de laquelle un glissement
+  /// sur la carte compte comme un swipe.
+  static const _swipeDistance = 80.0;
+  static const _swipeVelocity = 300.0;
+
+  double _dragDistance = 0;
+
   @override
   void initState() {
     super.initState();
     _loadLivings();
+  }
+
+  @override
+  void dispose() {
+    _circlesController.dispose();
+    super.dispose();
+  }
+
+  void _onCardDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    // La vitesse prime : un coup sec en sens inverse annule le glissement.
+    final movement = velocity.abs() >= _swipeVelocity
+        ? velocity
+        : (_dragDistance.abs() >= _swipeDistance ? _dragDistance : 0.0);
+    if (movement == 0) return;
+    _selectNeighbour(movement < 0 ? 1 : -1);
+  }
+
+  /// Sélectionne le living suivant (+1) ou précédent (-1).
+  /// Aux extrémités, il ne se passe rien.
+  void _selectNeighbour(int step) {
+    final livings = _livings ?? const <LivingSummary>[];
+    final current = livings.indexWhere((l) => l.id == _selectedId);
+    final target = current + step;
+    if (current < 0 || target < 0 || target >= livings.length) return;
+
+    _selectLiving(livings[target].id);
+    _scrollToCircle(target);
+  }
+
+  /// Centre autant que possible le cercle [index] dans la rangée.
+  void _scrollToCircle(int index) {
+    if (!_circlesController.hasClients) return;
+    final position = _circlesController.position;
+    const width = LivingAvatarItem.size + 8;
+    final offset =
+        index * (width + _circleSpacing) -
+        (position.viewportDimension - width) / 2;
+    _circlesController.animateTo(
+      offset.clamp(0.0, position.maxScrollExtent),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
   }
 
   /// Charge les summaries, puis le détail du sélectionné
@@ -182,7 +237,15 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
                     onTap: () => _selectLiving(living.id),
                   ),
               ],
-              card: _buildDetail(),
+              // Glisser la carte : animal suivant / précédent.
+              card: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: (_) => _dragDistance = 0,
+                onHorizontalDragUpdate: (d) =>
+                    _dragDistance += d.primaryDelta ?? 0,
+                onHorizontalDragEnd: _onCardDragEnd,
+                child: _buildDetail(),
+              ),
             );
           },
         ),
@@ -217,12 +280,13 @@ class _MyLivingsScreenState extends State<MyLivingsScreen> {
             SizedBox(
               height: 140,
               child: ListView(
+                controller: _circlesController,
                 scrollDirection: Axis.horizontal,
                 clipBehavior: Clip.none,
                 children: [
                   for (final circle in circles)
                     Padding(
-                      padding: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.only(right: _circleSpacing),
                       child: circle,
                     ),
                   AddLivingAvatar(onTap: _onAddLiving),
