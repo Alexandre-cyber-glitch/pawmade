@@ -78,6 +78,7 @@ Future<List<LivingDetail?>> pumpHost(
   FakeLivingApi api,
   LivingDetail living, {
   PickImage? pickImage,
+  CropImage? cropImage,
   ValueChanged<LivingDetail>? onPhotoChanged,
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
@@ -97,6 +98,8 @@ Future<List<LivingDetail?>> pumpHost(
                   living: living,
                   api: api,
                   pickImage: pickImage ?? fakePicker(null),
+                  // Par défaut : recadrage "transparent" (renvoie l'image telle quelle).
+                  cropImage: cropImage ?? (_, bytes, _) async => bytes,
                   onPhotoChanged: onPhotoChanged,
                 ),
               ),
@@ -243,6 +246,55 @@ void main() {
 
       expect(api.lastSlot, PhotoSlot.cover);
       expect(changed.single.coverUrl, '/api/photos/new-photo/content');
+    });
+
+    testWidgets("recadrage : l'image recadrée part au back", (tester) async {
+      final api = FakeLivingApi();
+      PhotoSlot? croppedSlot;
+      await pumpHost(
+        tester,
+        api,
+        dog,
+        pickImage: fakePicker(
+          XFile.fromData(
+            Uint8List.fromList([1, 2, 3]),
+            name: 'IMG_42.HEIC',
+            path: 'IMG_42.HEIC',
+          ),
+        ),
+        cropImage: (_, bytes, slot) async {
+          croppedSlot = slot;
+          expect(bytes, [1, 2, 3]); // reçoit bien l'image choisie
+          return Uint8List.fromList([9, 9]);
+        },
+      );
+
+      await tester.tap(find.text('Change cover'));
+      await tester.pumpAndSettle();
+
+      expect(croppedSlot, PhotoSlot.cover);
+      expect(api.lastBytes, [9, 9]);
+      expect(api.lastFilename, 'IMG_42.jpg'); // toujours un JPEG
+    });
+
+    testWidgets("recadrage annulé : rien n'est envoyé", (tester) async {
+      final api = FakeLivingApi();
+      final changed = <LivingDetail>[];
+      await pumpHost(
+        tester,
+        api,
+        dog,
+        pickImage: fakePicker(pickedFile),
+        cropImage: (_, _, _) async => null,
+        onPhotoChanged: changed.add,
+      );
+
+      await tester.tap(find.byTooltip('Change avatar'));
+      await tester.pumpAndSettle();
+
+      expect(api.lastSlot, isNull);
+      expect(changed, isEmpty);
+      expect(find.text('Save changes'), findsOneWidget);
     });
 
     testWidgets('galerie annulée : aucun appel', (tester) async {

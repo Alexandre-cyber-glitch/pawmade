@@ -76,7 +76,7 @@ class LivingDetailCard extends StatelessWidget {
           SafeNetworkImage(
             urls: [living.coverUrl, living.avatarUrl],
             fallback: _placeholder(),
-            alignment: Alignment.topCenter,
+            alignment: Alignment.center,
           ),
 
           // Léger dégradé en bas pour fondre la photo dans la carte

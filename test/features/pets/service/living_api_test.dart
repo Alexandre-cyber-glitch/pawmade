@@ -184,10 +184,8 @@ void main() {
 
     test('uploadPhoto : POST multipart, champ "file"', () async {
       final (api, server) = apiWith(
-        (_) => jsonResponse({
-          'id': 'p-1',
-          'url': '/api/photos/p-1/content',
-        }, 201),
+        (_) =>
+            jsonResponse({'id': 'p-1', 'url': '/api/photos/p-1/content'}, 201),
       );
 
       final photo = await api.uploadPhoto(3, bytes: bytes, filename: 'dog.jpg');
@@ -237,27 +235,25 @@ void main() {
       expect(updated.avatarUrl, '/api/photos/p-42/content');
     });
 
-    test('changePhoto : upload refusé -> pas de set, message du back', () async {
-      final (api, server) = apiWith(
-        (_) => problem(400, 'Only JPEG, PNG or WEBP images are accepted'),
-      );
+    test(
+      'changePhoto : upload refusé -> pas de set, message du back',
+      () async {
+        final (api, server) = apiWith(
+          (_) => problem(400, 'Only JPEG, PNG or WEBP images are accepted'),
+        );
 
-      await expectLater(
-        api.changePhoto(
-          1,
-          PhotoSlot.avatar,
-          bytes: bytes,
-          filename: 'a.txt',
-        ),
-        throwsA(
-          isA<ApiException>().having(
-            (e) => e.message,
-            'message',
-            'Only JPEG, PNG or WEBP images are accepted',
+        await expectLater(
+          api.changePhoto(1, PhotoSlot.avatar, bytes: bytes, filename: 'a.txt'),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.message,
+              'message',
+              'Only JPEG, PNG or WEBP images are accepted',
+            ),
           ),
-        ),
-      );
-      expect(server.requests, hasLength(1)); // le PUT n'est jamais parti
-    });
+        );
+        expect(server.requests, hasLength(1)); // le PUT n'est jamais parti
+      },
+    );
   });
 }

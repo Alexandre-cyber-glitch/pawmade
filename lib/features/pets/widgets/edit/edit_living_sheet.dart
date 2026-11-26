@@ -12,10 +12,20 @@ import '../../models/photo_upload.dart';
 import '../../models/update_living_request.dart';
 import '../../service/living_api.dart';
 import 'edit_form_fields.dart';
+import 'photo_crop_screen.dart';
 
 /// Ouvre un sélecteur d'image et renvoie le fichier choisi
 /// (`null` si l'utilisateur annule). Remplaçable dans les tests.
 typedef PickImage = Future<XFile?> Function();
+
+/// Recadre l'image choisie et renvoie les octets à envoyer
+/// (`null` si l'utilisateur annule). Remplaçable dans les tests.
+typedef CropImage =
+    Future<Uint8List?> Function(
+      BuildContext context,
+      Uint8List bytes,
+      PhotoSlot slot,
+    );
 
 /// Galerie du téléphone (ou sélecteur de fichier sur web / desktop).
 /// Redimensionnée et compressée avant l'envoi : une photo de téléphone
@@ -42,6 +52,7 @@ Future<LivingDetail?> showEditLivingSheet(
   required LivingApi api,
   ValueChanged<LivingDetail>? onPhotoChanged,
   PickImage pickImage = pickFromGallery,
+  CropImage cropImage = showPhotoCropper,
 }) {
   return showModalBottomSheet<LivingDetail>(
     context: context,
@@ -54,6 +65,7 @@ Future<LivingDetail?> showEditLivingSheet(
       api: api,
       onPhotoChanged: onPhotoChanged,
       pickImage: pickImage,
+      cropImage: cropImage,
     ),
   );
 }
@@ -63,6 +75,7 @@ class EditLivingSheet extends StatefulWidget {
   final LivingApi api;
   final ValueChanged<LivingDetail>? onPhotoChanged;
   final PickImage pickImage;
+  final CropImage cropImage;
 
   const EditLivingSheet({
     super.key,
@@ -70,6 +83,7 @@ class EditLivingSheet extends StatefulWidget {
     required this.api,
     this.onPhotoChanged,
     this.pickImage = pickFromGallery,
+    this.cropImage = showPhotoCropper,
   });
 
   @override
@@ -170,16 +184,28 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
     }
     if (file == null || !mounted) return; // annulé
 
-    setState(() => _uploading = slot);
+    // Recadrage : l'utilisateur choisit ce qui apparaîtra dans le cadre.
+    final Uint8List? cropped;
     try {
       final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      cropped = await widget.cropImage(context, bytes, slot);
+    } catch (e) {
+      debugPrint('Recadrage KO : $e');
+      if (mounted) setState(() => _error = 'Cannot read this image.');
+      return;
+    }
+    if (cropped == null || !mounted) return; // annulé
+
+    setState(() => _uploading = slot);
+    try {
       final updated = await widget.api.changePhoto(
         _living.id,
         slot,
-        bytes: bytes,
-        // Le back détecte le vrai format depuis les octets ;
-        // le nom sert juste à avoir une part multipart "fichier".
-        filename: file.name.isNotEmpty ? file.name : 'photo.jpg',
+        bytes: cropped,
+        // Le recadrage produit toujours un JPEG. Le nom sert juste à avoir
+        // une part multipart "fichier" (le back lit le vrai format).
+        filename: _jpegName(file.name),
       );
       // Prévenir l'écran même si le bloc a été fermé entre-temps :
       // la photo est déjà enregistrée côté back.
@@ -197,6 +223,12 @@ class _EditLivingSheetState extends State<EditLivingSheet> {
         _error = e.message;
       });
     }
+  }
+
+  /// "IMG_42.HEIC" -> "IMG_42.jpg", "" -> "photo.jpg"
+  static String _jpegName(String name) {
+    final base = name.replaceFirst(RegExp(r'\.[^.]*$'), '');
+    return '${base.isEmpty ? 'photo' : base}.jpg';
   }
 
   Future<void> _save() async {
@@ -508,7 +540,7 @@ class _PhotoPreview extends StatelessWidget {
                     key: ValueKey(coverUrl),
                     urls: [coverUrl],
                     fallback: placeholder(40),
-                    alignment: Alignment.topCenter,
+                    alignment: Alignment.center,
                   ),
                   if (uploading == PhotoSlot.cover) loaderOverlay(),
                 ],
